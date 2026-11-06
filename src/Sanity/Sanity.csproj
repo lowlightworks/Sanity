@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- This is the most appropriate target framework for the game's Unity version. -->
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <!-- The plugin's ID (BepInEx GUID). Never change it: the config file is named after it. -->
+    <AssemblyName>Lowlight.Sanity</AssemblyName>
+    <!-- The display name. -->
+    <AssemblyTitle>Sanity</AssemblyTitle>
+    <!-- The version: plain x.y.z (Thunderstore and BepInEx need that). Goes up only when publishing. -->
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+
+  <!-- AI disclosure, as Thunderstore asks of AI-made mods. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="AI_Assisted_Creation" Value="This assembly was partially or fully created with the assistance of Generative AI (Claude Opus 5.5)." />
+    <AssemblyMetadata Include="AI_Model_Vendor" Value="Anthropic" />
+  </ItemGroup>
+
+  <!-- Mod files to copy to the relative BepInEx directory after build -->
+  <ItemGroup>
+    <!-- TargetPath is the dll file produced during build. -->
+    <DeployModFiles Include="$(TargetPath)" BepInExDir="plugins/" />
+  </ItemGroup>
+</Project>

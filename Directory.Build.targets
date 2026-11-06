@@ -1,0 +1,131 @@
+<Project>
+  <!--
+    This is a special file that contains shared configuration
+    for all project files in subdirectories.
+  -->
+
+  <!-- Set additional NuGet sources -->
+  <PropertyGroup>
+    <RestoreAdditionalProjectSources>
+      https://nuget.bepinex.dev/v3/index.json;
+      https://nuget.windows10ce.com/nuget/v3/index.json
+    </RestoreAdditionalProjectSources>
+    <PublicizerRuntimeStrategies>unsafe</PublicizerRuntimeStrategies>
+  </PropertyGroup>
+
+  <!-- Build dependencies -->
+  <ItemGroup>
+    <!--
+      If you upload your project on NuGet, PrivateAssets="all"
+      prevents consumers of your package from referencing these
+      packages transitively. This is desired because these packages
+      are not required by anyone using your package as they are
+      code analyzers, source generators, or other build-only packages.
+    -->
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+
+    <PackageReference Include="Krafs.Publicizer" Version="2.3.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.26.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.1.*" PrivateAssets="all" />
+    <!-- Source-only polyfills for C# language features https://github.com/Sergio0694/PolySharp -->
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Modding dependencies -->
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <!-- In reality BepInEx 5.4.21 ships HarmonyX 2.9 but BepInEx.Core gives us 2.7 -->
+    <PackageReference Include="HarmonyX" Version="2.9.0" />
+  </ItemGroup>
+
+  <!-- NuGet fallback stripped game references -->
+  <ItemGroup Condition="!Exists('$(ManagedDir)')">
+    <PackageReference Include="LethalCompany.GameLibs.Steam" Version="*-*"
+      PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Local game references -->
+  <ItemGroup Condition="Exists('$(ManagedDir)')">
+    <!--
+      Reference all assemblies except ones that come
+      with our target framework or would cause conflicts.
+      Private="false" prevents these from being copied to build output.
+    -->
+    <LocalReferences
+      Include="$(ManagedDir)*.dll"
+      Exclude="$(ManagedDir)Mono*.dll;$(ManagedDir)netstandard.dll;$(ManagedDir)System*.dll;$(ManagedDir)mscorlib.dll"
+    />
+    <Reference Include="@(LocalReferences)" Private="false" />
+    <!--
+      Publicizing allows us access to private/protected/internal members
+      but can break inheritance from game objects. This default setup
+      will work for nearly all cases
+
+      You can fully disable virtual member publicizing by including 
+      `IncludeVirtualMembers="false"` below.
+
+      It is also possible to continue publicizing all virtual members and
+      exclude the specific ones you need for inheritance
+      <DoNotPublicize Include="Assembly-CSharp:NAMESPACE.CLASS" />
+
+      See more: https://github.com/krafs/Publicizer?tab=readme-ov-file#usage
+    -->
+    <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />
+  </ItemGroup>
+
+  <!-- Copy mod files defined in projects to the target BepInEx directory -->
+  <Target Name="DeployFiles" AfterTargets="Build" Condition="'$(DeployModFilesEnabled)' == 'true'">
+    <PropertyGroup>
+      <_TargetDir>$([MSBuild]::NormalizeDirectory($(LethalCompanyBepInExDir)))</_TargetDir>
+    </PropertyGroup>
+    <Message
+      Text="Deploy → @(DeployModFiles -> '%(BepInExDir)%(FileName)%(Extension)')"
+      Importance="High"
+    />
+    <Error
+      Text="BepInEx directory '$(_TargetDir)' doesn't exist! Configure LethalCompanyBepInExDir to point to a valid path in the Config.Build.user.props file."
+      Condition="!Exists('$(_TargetDir)')"
+    />
+    <Copy SourceFiles="@(DeployModFiles)" DestinationFolder="$(_TargetDir)%(BepInExDir)" />
+  </Target>
+
+  <!--
+    To make building Thunderstore packages uncoupled from release builds, swap
+    the positions of this Target line:
+    <Target
+      Name="PackTS"
+      DependsOnTargets="Build"
+      Condition="'$(ThunderstorePackable)' != 'false'"
+    >
+    and the one below.
+
+    If you uncouple Thunderstore package builds from release builds, you can build
+    Thunderstore packages by calling `dotnet build -c Release -target:PackTS -v d` (verbosity detailed).
+
+    Publish to Thunderstore by including `-property:PublishTS=true` in the command.
+  -->
+  <Target
+    Name="PackTS"
+    AfterTargets="Build"
+    Condition="'$(Configuration)' == 'Release' And '$(ThunderstorePackable)' != 'false'"
+  >
+    <Error
+      Text=" PackTS must be called with Release configuration."
+      Condition="'$(Configuration)' != 'Release'"
+    />
+    <PropertyGroup>
+      <BuildArgument Condition="'$(PublishTS)' != 'true'">build</BuildArgument>
+      <BuildArgument Condition="'$(PublishTS)' == 'true'">publish</BuildArgument>
+    </PropertyGroup>
+    <Exec Command="dotnet tool restore" />
+    <Exec Command="dotnet tcli $(BuildArgument) --package-version $(Version)" />
+  </Target>
+</Project>
