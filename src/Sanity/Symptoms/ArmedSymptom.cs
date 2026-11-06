@@ -195,7 +195,26 @@ internal abstract class ArmedSymptom : Symptom
         ResetDayState();
     }
 
-    private void Drop(string why)
+    // For a symptom that catches its moment itself (a hook on the game's own code), so it can fire right then rather
+    // than on the next frame: the same rules as the per-frame watch (tier, gap, relax; held-back state from this frame).
+    // True = it fired.
+    protected bool FireIfFree(PlayerControllerB player)
+    {
+        if (!armed || HeldBy.Length > 0 || player.isPlayerDead || (!Enabled && !armedByDebug))
+        {
+            return false;
+        }
+        SanityTier tier = SanityMeter.Tier < MinTier ? MinTier : SanityMeter.Tier;
+        if (!TryFire(player, tier))
+        {
+            return false;
+        }
+        armed = false;
+        SanityDirector.NoteFired(this, tier, armedFor, WaitSummary());
+        return true;
+    }
+
+    protected void Drop(string why)
     {
         armed = false;
         Telemetry.Event("SYMPTOM_DROPPED", armedFor, $"{Name} armed but never fired: {why}" + WaitSummary());

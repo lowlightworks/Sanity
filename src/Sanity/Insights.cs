@@ -151,11 +151,11 @@ internal static class Insights
         {
             float length = alive - tripStart;
             TripLengths.Add(length);
-            if (length >= 120f && !isShip)
+            if (length >= Symptoms.LostTimeSymptom.MinInsideSeconds && !isShip)
             {
                 longExits++;
                 ExitByTier[tier]++;
-                if (SanityMeter.DayFraction >= 0.35f)
+                if (Symptoms.LostTimeSymptom.LateEnough)
                 {
                     longExitsBelievable++;
                 }

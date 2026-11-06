@@ -52,6 +52,7 @@ internal static class SanityDirector
     };
 
     private static readonly List<Symptom> Eligible = new List<Symptom>();
+    private static readonly HashSet<Symptom> HeldForSprint = new HashSet<Symptom>();   // in this roll only because they can wait
 
     // The ROLL telemetry row for the roll being decided (reused, so a roll makes no garbage beyond its text).
     private static readonly StringBuilder RollText = new StringBuilder(320);
@@ -71,6 +72,11 @@ internal static class SanityDirector
 
     // True while a forced play (F8, a debug menu button) is being handled.
     internal static bool ForcedContext { get; private set; }
+
+    // The "can't play" reason of symptoms your own sprinting drowns out. While SprintCheckOff is set, they skip that
+    // check, so the director can ask whether sprinting is the only thing in the way (then the symptom can be held).
+    internal const string SprintingReason = "busy: sprinting";
+    internal static bool SprintCheckOff;
 
     // Debug: every chain link rolls in (its chance treated as 1), so follow-ups can be tested.
     internal static bool ChainsAlways;
@@ -151,6 +157,7 @@ internal static class SanityDirector
             DayMood.Reset();
             Waves.Reset();
             Chains.Reset();
+            SprintHold.Reset();
             foreach (Symptom symptom in AllSymptoms)
             {
                 symptom.SecondsSincePlayed = 9999f;
@@ -174,6 +181,7 @@ internal static class SanityDirector
             symptom.Watch(player);
         }
         Chains.Tick(player);
+        SprintHold.Tick(player);
 
         // No symptoms while dead or Calm.
         if (player.isPlayerDead || SanityMeter.Tier == SanityTier.Calm)
@@ -227,16 +235,23 @@ internal static class SanityDirector
 
             // Collect the symptoms that make sense right now. Part 2 of the row: each one's weight, or why it's out.
             Eligible.Clear();
+            HeldForSprint.Clear();
             float totalWeight = 0f;
             foreach (Symptom symptom in AllSymptoms)
             {
                 string reason = WhyNot(symptom, player, tier);
+                if (reason == SprintingReason && symptom.HoldsForSprint && !SprintHold.Waiting && WouldPlayWithoutSprint(symptom, player, tier))
+                {
+                    // Only your sprinting is in the way: it can wait for you to slow down (SprintHold).
+                    HeldForSprint.Add(symptom);
+                    reason = "";
+                }
                 if (reason.Length == 0)
                 {
                     Eligible.Add(symptom);
                     float weight = Weight(symptom);
                     totalWeight += weight;
-                    RollText.Append(Invariant($" {symptom.ConfigKey}=w{weight:0.##}"));
+                    RollText.Append(Invariant($" {symptom.ConfigKey}=w{weight:0.##}")).Append(HeldForSprint.Contains(symptom) ? "(sprint)" : "");
                 }
                 else
                 {
@@ -263,6 +278,13 @@ internal static class SanityDirector
                     Telemetry.Event("SYMPTOM_REJECTED", recovery,
                         Invariant($"{chosen.Name} turned down (recovery {recovery * 100f:F0}%)") + (forced ? " (F8)" : ""));
                     RollText.Append(Invariant($" {chosen.ConfigKey}:rejected[recovery {recovery:F2} roll {check:F2}]"));
+                }
+                else if (HeldForSprint.Contains(chosen))
+                {
+                    HoldForSprint(chosen, tier, forced ? "F8" : "");
+                    RollText.Append(' ').Append(chosen.ConfigKey).Append(":held");
+                    played = chosen.ConfigKey;
+                    break;
                 }
                 else if (PlayChosen(player, chosen, tier, forced ? "F8" : ""))
                 {
@@ -408,6 +430,33 @@ internal static class SanityDirector
         Probe(symptom);
         Chains.Trigger(symptom, "played");
         return true;
+    }
+
+    // Would this symptom be in the roll if you weren't sprinting?
+    private static bool WouldPlayWithoutSprint(Symptom symptom, PlayerControllerB player, SanityTier tier)
+    {
+        SprintCheckOff = true;
+        try
+        {
+            return WhyNot(symptom, player, tier).Length == 0;
+        }
+        finally
+        {
+            SprintCheckOff = false;
+        }
+    }
+
+    // Drawn while you sprint: hold it until you slow down. Like arming, the roll is spent now and the director carries
+    // on; it plays (or is dropped) on its own.
+    private static void HoldForSprint(Symptom symptom, SanityTier tier, string source)
+    {
+        symptom.SecondsSincePlayed = 0f;
+        SecondsSinceLast = 0f;
+        quietSeconds = 0f;
+        LastSymptom = symptom.Name + " (held: sprinting)";
+        string via = source.Length == 0 ? "" : $" ({source})";
+        Telemetry.Event("SYMPTOM_ARMED", (int)tier, $"{symptom.Name}{via}: waits for you to stop sprinting");
+        SprintHold.Start(symptom);
     }
 
     // Telemetry: open a reaction probe for a symptom that just played (with where it came from, if anywhere).

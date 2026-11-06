@@ -164,6 +164,11 @@ internal sealed class DebugMenu : MonoBehaviour
                 lines++;
             }
         }
+        if (SprintHold.Waiting)
+        {
+            nowLines.Add(SprintHold.Status);
+            lines++;
+        }
         if (PresenceSymptom.Active)
         {
             nowLines.Add("Presence: " + PresenceSymptom.DebugState(player));

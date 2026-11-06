@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.2 (2026-11-06)
+
+- Phantom sounds and phantom steps no longer get skipped while you sprint: they wait up to 10 s for you to slow down.
+- Lost time reworked: it's now always night when it happens (8-10 PM on the clock), the game's own music cue for a new
+  part of the day plays, and it lasts 12 s. It needs an unbroken 3-minute trip inside and at least 6 minutes since
+  landing (longer on longer days), and it can happen on more days. It's applied as you go through the exit, so it
+  never switches in front of you, and it stays out of the way once the ship is leaving.
+- Lost time is followed by a walkie click more often.
+
 ## 0.0.1 (2026-11-06)
 
 First public release. Very early and still rough: it's out so it's easy to install and share, not because it's

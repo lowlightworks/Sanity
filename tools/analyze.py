@@ -18,7 +18,7 @@ TIERS = ["Calm", "Uneasy", "Disturbed", "Breaking"]
 
 # ROLL row: "<tier> <where> <company|alone> chance X[ F8] | Key=wN Key=[reason] ... | Key:rejected[...] Key:played -> Key"
 ROLL_STATUS = re.compile(r"(\w+)=(?:w([\d.]+)|\[([^\]]*)\])")
-ROLL_PICK = re.compile(r"(\w+):(rejected|failed|played)(?:\[([^\]]*)\])?")
+ROLL_PICK = re.compile(r"(\w+):(rejected|failed|played|armed|held)(?:\[([^\]]*)\])?")
 
 
 def kind(reason):
@@ -63,7 +63,7 @@ def summarise_rolls(events):
         lottery = " ".join(f"{t[0]} {in_lottery[key][t]}/{per_tier[t]['rolls']}" for t in TIERS[1:] if per_tier[t]["rolls"])
         out = ", ".join(f"{k} {n}" for k, n in kept_out[key].most_common(3))
         d = drawn[key]
-        print(f"  {key:13} in lottery {lottery:28} drawn: played {d['played']} rejected {d['rejected']} failed {d['failed']}"
+        print(f"  {key:13} in lottery {lottery:28} drawn: played {d['played']} armed {d['armed']} held {d['held']} rejected {d['rejected']} failed {d['failed']}"
               + (f" | kept out by: {out}" if out else ""))
     for reason, n in fails.most_common(5):
         print(f"  failed after being drawn x{n}: {reason}")

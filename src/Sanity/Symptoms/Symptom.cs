@@ -31,6 +31,10 @@ internal abstract class Symptom
     // Right after it plays, its weight drops to almost zero, then recovers over roughly this many seconds.
     internal virtual float RecoverySeconds => 60f;
 
+    // True for symptoms your own sprinting drowns out (phantom sound, phantom steps): drawn while you sprint, they wait
+    // for you to slow down instead of being skipped (SprintHold).
+    internal virtual bool HoldsForSprint => false;
+
     // Not used (always empty): follow-ups are defined as chains in DirectorLayers (Chains).
     internal virtual IReadOnlyList<Symptom> FollowUps => System.Array.Empty<Symptom>();
 

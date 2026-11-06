@@ -4,49 +4,57 @@ using static System.FormattableString;
 
 namespace Sanity.Symptoms;
 
-// Lost time: you step out of the facility and it's evening, or nearly midnight.
-// Armed by the director (Uneasy or lower) once the day is far enough along to be believable (1 PM or later). At most
-// once a day, and only on days it's allowed at all (a daily roll, so it happens on about one day in 2-3). It then
-// waits, for as long as the day lasts, for you to leave the facility after at least 120 s inside on that visit (time
-// inside before it was armed counts, so it can be armed outside or in the ship).
-// It fires ONLY on the frame you step out. If anything holds it back at that moment (above its tier, another
-// symptom under 5 s ago, a visit under 120 s), that exit is let go and it waits for the next one: it never turns
-// night later while you're already outside.
-// When you step out, for 7 s the clock shows a later time and the sky matches it; then over 1.5 s both slide back to
-// the real time, which then stays. The shown time runs on at the game's own pace (always the real time plus a fixed
-// lie), so mods that change the day's speed still work.
-//   The lie: the real time plus 3-6 hours, but at least 6 PM and at most 11:50 PM; it needs at least an hour of lie to
-//   play (from about 10:50 PM there's nothing believable left to lose). It doesn't depend on sanity.
-//   Clock: every clock that formats from the game's own clock update shows it (vanilla, GeneralImprovements' 24-hour
-//   clock, LethalHUD's), with the matching day icon. Sky: the game's own sun animation, set to the shown time.
-// Going back inside, dying or leaving ends it at once. Nothing is sent: only your clock and sky lie.
+// Lost time: you step out of the facility and it's night.
+// When: at most once a day, on days a daily roll allows (DailyChance, rolled by each player's own game). It fires on
+// the way out of the facility, once both of these are true:
+//   - enough real time has passed since landing: MinMinutesAfterLanding on a normal-length day, longer in proportion
+//     on longer days (DayLength), so it's never early in the day on the clock either;
+//   - this visit inside lasted at least MinInsideSeconds without a break. The visit can start before the first rule is
+//     met (in at 3 minutes, out after 6: it fires).
+// Armed by the director (Uneasy or lower) no earlier than MinInsideSeconds before it could fire, then it waits for the
+// day. It fires as you go through the exit (a hook on the game's entrance teleport), so the fake time is already there
+// the moment you're outside; it never switches to night in front of you. If anything holds it back at that exit (tier,
+// another symptom under 5 s ago, a short visit), that exit is let go and it waits for the next one.
+// What you see: the clock shows a time between EarliestShownHour and LatestShownHour (always before the game's own
+// "ship leaving soon" warning), with the matching day icon; the sky and light (the game's sun animation) match it; and
+// the game's own time-of-day music cue plays, as it does when you step out into a new part of the day. After
+// FakeSeconds, the clock and sky slide back to the real time over SlideSeconds. The shown time runs on at the game's
+// own pace, so mods that change the day's speed still work.
+// The ship leaving early (a vote) or the midnight warning: it isn't armed, an armed one is dropped, and one that's
+// showing ends at once, so the clock never contradicts the game's "return by" message.
+// Going back inside, dying or leaving also end it at once. Nothing is sent: only your clock, sky and music lie.
 internal sealed class LostTimeSymptom : ArmedSymptom
 {
-    private const float DailyChance = 0.55f;        // share of days it's allowed at all
-    private const float EarliestHour = 13f;         // armed from 1 PM on a normal-length day (earlier on longer days)
-    private const float MinInsideSeconds = 120f;    // 2 minutes inside on this visit
-    private const float MinLieHours = 3f;
-    private const float MaxLieHours = 6f;
-    private const float EveningHour = 18f;
-    private const float LatestHour = 23f + 50f / 60f;
+    private const float DailyChance = 0.8f;              // share of days it's allowed at all, per player
+    private const float MinMinutesAfterLanding = 6f;     // real minutes on a normal-length day; scaled by day length
+    internal const float MinInsideSeconds = 180f;        // one continuous visit inside
+    private const float EarliestShownHour = 20f;         // 8 PM: clearly evening
+    private const float LatestShownHour = 22f;           // 10 PM: before the game's own warning at about 10:12 PM
     private const float LeastLieHours = 1f;
-    private const float FakeSeconds = 7f;
+    private const float FakeSeconds = 12f;
     private const float SlideSeconds = 1.5f;
-    private const float ClockStartHour = 6f;        // the game's clock: 6 AM + day fraction x hours in a day
+    private const float ClockStartHour = 6f;             // the game's clock: 6 AM + day fraction x hours in a day
+    private const float CueDelay = 0.5f;                 // the game's own delay for its time-of-day cue
+
+    private static LostTimeSymptom? instance;
 
     private static bool rolledToday;
     private static float landedAt;
-    private static float landedFraction;
     private static bool allowedToday;
     private static bool usedToday;
     private static bool wasInside;
     private static float insideSince;
-    private static bool leftThisFrame;
-    private static int exitFrame = -1;
-    private static float visitSeconds;
+    private static int exitHandledFrame = -10;
+    private static bool exiting;
+    private static float exitVisitSeconds;
     private static bool lying;
     private static float lieStarted;
     private static float lieOffset;
+
+    internal LostTimeSymptom()
+    {
+        instance = this;
+    }
 
     // For the clock and sky patches: how far ahead of the real day time to show right now (0 = the truth).
     internal static float ShownOffset { get; private set; }
@@ -67,19 +75,30 @@ internal sealed class LostTimeSymptom : ArmedSymptom
     // Waits all day for its exit (the day ending drops it).
     protected override float ExpireSeconds => 1e9f;
 
-    internal override string Waits => "you leaving the facility after 120 s inside";
+    internal override string Waits => Invariant($"you leaving the facility after {MinInsideSeconds / 60f:0.#} min inside");
 
     protected override bool Showing => lying;
 
+    // Real seconds after landing before it can fire today.
+    private static float EarliestSeconds => MinMinutesAfterLanding * 60f * (DayLength.Measured ? DayLength.Factor : 1f);
+
+    private static float SinceLanding => Time.time - landedAt;
+
+    // Enough real time since landing for it to fire (also used by telemetry's opportunity count).
+    internal static bool LateEnough => SinceLanding >= EarliestSeconds;
+
     internal override string MomentStatus(PlayerControllerB player)
     {
+        string landing = SinceLanding < EarliestSeconds
+            ? Invariant($"fires from {EarliestSeconds / 60f:F1} min after landing (now {SinceLanding / 60f:F1}); ")
+            : "";
         if (!player.isInsideFactory)
         {
-            return "waits for you to go in, stay 120 s, and come out";
+            return landing + Invariant($"waits for you to go in, stay {MinInsideSeconds:F0} s, and come out");
         }
         float visit = Time.time - insideSince;
-        return visit >= MinInsideSeconds ? Invariant($"inside {visit:F0} s: fires when you step out")
-            : Invariant($"inside {visit:F0} s (needs {MinInsideSeconds:F0} before an exit counts)");
+        return landing + (visit >= MinInsideSeconds ? Invariant($"inside {visit:F0} s: fires when you step out")
+            : Invariant($"inside {visit:F0} s (needs {MinInsideSeconds:F0} before an exit counts)"));
     }
 
     protected override string CantArmReason(PlayerControllerB player)
@@ -97,48 +116,82 @@ internal sealed class LostTimeSymptom : ArmedSymptom
         {
             return "not today (daily roll)";
         }
-
-        float hour = HourOf(timeOfDay.normalizedTimeOfDay, timeOfDay.numberOfHours);
-        float waitLeft = RealSecondsUntilBelievable(timeOfDay);
-        if (hour < EarliestHour && waitLeft > 0f)
+        if (ShipLeaving(timeOfDay))
         {
-            return Invariant($"too early: {Clock(hour)} (needs {Clock(EarliestHour)} or {waitLeft / 60f:F1} more real min)");
+            return "the ship is leaving (early vote or the midnight warning)";
         }
-        if (hour > LatestHour - LeastLieHours)
+        // Armed no earlier than one full visit before it could fire, so it doesn't hold an armed slot all morning.
+        if (SinceLanding < EarliestSeconds - MinInsideSeconds)
+        {
+            return Invariant($"too early: {SinceLanding / 60f:F1} min since landing (armed from {(EarliestSeconds - MinInsideSeconds) / 60f:F1})");
+        }
+        float hour = HourOf(timeOfDay.normalizedTimeOfDay, timeOfDay.numberOfHours);
+        if (hour > LatestShownHour - LeastLieHours)
         {
             return $"too late: {Clock(hour)} (nothing believable left to lose)";
         }
         return "";
     }
 
+    // Only on the way out (HandleExit). Armed from the debug menu with checks ignored, any exit will do.
     protected override bool TryFire(PlayerControllerB player, SanityTier tier)
     {
         TimeOfDay timeOfDay = TimeOfDay.Instance;
-        // Only on the very frame you step out. Armed from the debug menu with checks ignored, any exit will do.
-        if (!leftThisFrame || exitFrame != Time.frameCount || (visitSeconds < MinInsideSeconds && !ArmedByDebug)
-            || timeOfDay == null)
+        if (!exiting || timeOfDay == null)
         {
             return false;
+        }
+        if (!ArmedByDebug)
+        {
+            if (exitVisitSeconds < MinInsideSeconds)
+            {
+                Miss("short visit");
+                return false;
+            }
+            if (SinceLanding < EarliestSeconds)
+            {
+                Miss("too soon after landing");
+                return false;
+            }
+            if (ShipLeaving(timeOfDay))
+            {
+                return false;
+            }
         }
 
         float hourNow = HourOf(timeOfDay.normalizedTimeOfDay, timeOfDay.numberOfHours);
-        float shownHour = Mathf.Clamp(hourNow + Random.Range(MinLieHours, MaxLieHours), EveningHour, LatestHour);
+        float shownHour = Random.Range(EarliestShownHour, LatestShownHour);
         if (shownHour - hourNow < LeastLieHours)
         {
+            Miss("too late in the day");
             return false;
         }
 
-        lieOffset = (shownHour - hourNow) / Mathf.Max(1f, timeOfDay.numberOfHours);
+        float hours = Mathf.Max(1f, timeOfDay.numberOfHours);
+        lieOffset = (shownHour - hourNow) / hours;
         ShownOffset = lieOffset;
         lying = true;
         usedToday = true;
         lieStarted = Time.time;
-        timeOfDay.RefreshClockUI();   // the clock shows the lie at once, as it fades in outside
+        timeOfDay.RefreshClockUI();   // the clock and its icon show the lie at once
+        float shownFraction = Mathf.Clamp(timeOfDay.normalizedTimeOfDay + lieOffset, 0f, 0.99f);
+        if (timeOfDay.sunAnimator != null)
+        {
+            timeOfDay.sunAnimator.SetFloat("timeOfDay", shownFraction);   // the sky, before this frame is drawn
+        }
+        PlayCue(timeOfDay, shownFraction);
 
         Telemetry.Event("LOST_TIME", shownHour - hourNow, Invariant(
-            $"real {Clock(hourNow)} shown {Clock(shownHour)} (+{shownHour - hourNow:F1} h) after {visitSeconds:F0} s inside"));
+            $"real {Clock(hourNow)} shown {Clock(shownHour)} (+{shownHour - hourNow:F1} h) after {exitVisitSeconds:F0} s inside, {SinceLanding / 60f:F1} min after landing"));
         Chains.Trigger(this, "shown");
         return true;
+    }
+
+    // Called by the entrance hook (EntrancePatch) right after the game moves you out of the facility, in the same
+    // frame, before anything outside is drawn.
+    internal static void OnLeftFacility(PlayerControllerB player)
+    {
+        instance?.HandleExit(player);
     }
 
     protected override void WatchAlways(PlayerControllerB player)
@@ -148,42 +201,25 @@ internal sealed class LostTimeSymptom : ArmedSymptom
             rolledToday = true;
             allowedToday = Random.value < DailyChance;
             landedAt = Time.time;
-            TimeOfDay clock = TimeOfDay.Instance;
-            landedFraction = clock != null ? clock.normalizedTimeOfDay : 0f;
-        }
-        else if (Time.time - landedAt < 30f)
-        {
-            // On the first day after a launch the clock jumps to the morning just after landing, so the first reading
-            // is too early (lost time would wait ~1.5 min too long). Move the landing reading up with the clock for the
-            // first 30 s (on a clock running normally this changes nothing).
-            TimeOfDay clock = TimeOfDay.Instance;
-            if (clock != null && clock.normalizedTimeOfDay > landedFraction + 0.01f)
-            {
-                landedFraction = clock.normalizedTimeOfDay;
-                landedAt = Time.time;
-            }
         }
 
-        // Time inside on this visit, and the moment you step out.
+        // Time inside on this visit, and the moment you step out. An exit the entrance hook didn't see (another mod's
+        // teleport, say) is caught here instead, a frame later.
         bool inside = player.isInsideFactory && !player.isPlayerDead;
         if (inside && !wasInside)
         {
             insideSince = Time.time;
         }
-        leftThisFrame = wasInside && !inside && !player.isPlayerDead;
-        visitSeconds = Time.time - insideSince;
-        wasInside = inside;
-        if (leftThisFrame)
+        if (wasInside && !inside && !player.isPlayerDead)
         {
-            exitFrame = Time.frameCount;
-            if (IsArmed && visitSeconds < MinInsideSeconds && !ArmedByDebug)
-            {
-                Miss("short visit");
-            }
-            else if (IsArmed && HeldBy.Length > 0)
-            {
-                Miss("exit held by " + HeldBy);
-            }
+            HandleExit(player);
+        }
+        wasInside = inside;
+
+        TimeOfDay timeOfDay = TimeOfDay.Instance;
+        if (IsArmed && timeOfDay != null && ShipLeaving(timeOfDay))
+        {
+            Drop("the ship is leaving");
         }
 
         if (!lying)
@@ -191,12 +227,12 @@ internal sealed class LostTimeSymptom : ArmedSymptom
             return;
         }
 
-        TimeOfDay timeOfDay = TimeOfDay.Instance;
         float t = Time.time - lieStarted;
         string ended = timeOfDay == null ? "no clock"
             : player.isPlayerDead ? "died"
             : !SanityMeter.OnMoon ? "left the moon"
             : player.isInsideFactory ? "went back inside"
+            : ShipLeaving(timeOfDay) ? "the ship is leaving"
             : t >= FakeSeconds + SlideSeconds ? "finished"
             : "";
         if (ended.Length > 0)
@@ -227,7 +263,35 @@ internal sealed class LostTimeSymptom : ArmedSymptom
         allowedToday = false;
         usedToday = false;
         wasInside = false;
-        leftThisFrame = false;
+        exitHandledFrame = -10;
+    }
+
+    // One exit, seen by the entrance hook or (a frame later) by the per-frame watch: handled once.
+    private void HandleExit(PlayerControllerB player)
+    {
+        if (Time.frameCount - exitHandledFrame <= 2)
+        {
+            return;
+        }
+        exitHandledFrame = Time.frameCount;
+        exitVisitSeconds = Time.time - insideSince;
+        if (!IsArmed)
+        {
+            return;
+        }
+
+        exiting = true;
+        try
+        {
+            if (!FireIfFree(player) && HeldBy.Length > 0)
+            {
+                Miss("exit held by " + HeldBy);
+            }
+        }
+        finally
+        {
+            exiting = false;
+        }
     }
 
     private static void EndLie(string ended)
@@ -243,23 +307,24 @@ internal sealed class LostTimeSymptom : ArmedSymptom
         Telemetry.Event("LOST_TIME_END", lasted, Invariant($"{ended} after {lasted:F1}s"));
     }
 
-    // "Enough of the day has passed" in REAL time: as long as a normal-length day takes to get from your landing time
-    // to 1 PM (about 3.8 min). On a normal day that's the same as the clock rule; on a longer day (a mod or upgrade
-    // slowing the clock) it comes earlier on the clock, because people don't stay for the whole longer day (in
-    // playtests, doubled days ended around 1:20 PM). Returns the real seconds still to wait (0 or less = believable
-    // now).
-    private static float RealSecondsUntilBelievable(TimeOfDay timeOfDay)
+    // The game's own music cue for that part of the day, as it plays when you step out into a new one.
+    private static void PlayCue(TimeOfDay timeOfDay, float shownFraction)
     {
-        // The game's base pace (as DayLength: the moon's own speed settings don't match the real clock on modded
-        // moons).
-        float normalPace = timeOfDay.totalTime > 0f ? 1f / timeOfDay.totalTime : 0f;
-        if (normalPace <= 0f)
+        int phase = (int)timeOfDay.GetDayPhase(shownFraction);
+        AudioClip[]? cues = timeOfDay.timeOfDayCues;
+        if (cues == null || phase < 0 || phase >= cues.Length || cues[phase] == null || timeOfDay.TimeOfDayMusic == null)
         {
-            return 0f;
+            return;
         }
-        float earliestFraction = (EarliestHour - ClockStartHour) / Mathf.Max(1f, timeOfDay.numberOfHours);
-        float needed = Mathf.Max(0f, earliestFraction - landedFraction) / normalPace;
-        return needed - (Time.time - landedAt);
+        timeOfDay.PlayTimeMusicDelayed(cues[phase], CueDelay);
+    }
+
+    // The ship is about to leave: dead players voted to leave early (the game's "return by" message), or the game's
+    // own midnight warning came.
+    private static bool ShipLeaving(TimeOfDay timeOfDay)
+    {
+        StartOfRound startOfRound = StartOfRound.Instance;
+        return timeOfDay.shipLeavingAlertCalled || (startOfRound != null && startOfRound.shipIsLeaving);
     }
 
     // The game's clock: 6 AM plus the day fraction times the hours in a day (HUDManager.SetClock).

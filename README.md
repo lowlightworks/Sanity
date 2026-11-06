@@ -40,7 +40,7 @@ warning that something is wrong.
 - **Phantom hit**: you get hit by nothing; the health it took comes back slowly, on your screen only.
 - **Locked door**: the door you reach is locked. Use a key on it and the key is gone.
 - **Vanishing item**: the loot you're walking up to isn't there when you reach it.
-- **Lost time**: you step out of the facility and it's evening, or nearly midnight.
+- **Lost time**: you step out of the facility after a long trip inside and it's night.
 - **The Presence**: something unseen moves around you for a while: its steps, its voice, the lights.
 
 How sanity is calculated, and the design behind each symptom, is in [docs/design.md](docs/design.md).
@@ -121,8 +121,8 @@ Where to start reading the code: the comment at the top of `src/Sanity/Plugin.cs
 ## Known limitations
 
 - Phantom sounds and the Presence only imitate vanilla monsters.
-- Phantom sounds and steps don't play while you sprint, so a lot of running means fewer of them.
-- Lost time is subtle: it changes the clock and the sky, so it's easy to miss if you don't watch either.
+- Phantom sounds and steps wait while you sprint (your own steps would drown them out); a long sprint can lose one.
+- Lost time changes the clock, the sky and the music, but can still be missed.
 - Balance is early and based on limited data.
 
 The full list, with what's planned for each, is in [docs/design.md](docs/design.md#known-issues-and-limitations).

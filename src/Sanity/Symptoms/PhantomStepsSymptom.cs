@@ -117,6 +117,8 @@ internal sealed class PhantomStepsSymptom : Symptom
 
     internal override string ConfigKey => "PhantomSteps";
 
+    internal override bool HoldsForSprint => true;
+
     internal override string Family => "sound";
 
     internal override SanityTier MinTier => SanityTier.Uneasy;
@@ -150,9 +152,9 @@ internal sealed class PhantomStepsSymptom : Symptom
         {
             return "busy: in an animation";
         }
-        if (player.isSprinting)
+        if (player.isSprinting && !SanityDirector.SprintCheckOff)
         {
-            return "busy: sprinting";   // your own footsteps drown them out
+            return SanityDirector.SprintingReason;   // your own footsteps drown them out (the director may hold them)
         }
 
         float teammate = NearestTeammate(player, startOfRound);

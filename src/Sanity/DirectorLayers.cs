@@ -174,7 +174,7 @@ internal static class Chains
         new Link { From = "PhantomSound", Trigger = "approaching", To = "Flicker", Chance = 0.3f, MinTier = SanityTier.Breaking,
                    MinDelay = 0.5f, MaxDelay = 1.5f, Play = (p, t, _, _) => FlickerSymptom.FlickNow(p, t) },
         // You come out to the wrong time... and the radio clicks.
-        new Link { From = "LostTime", Trigger = "shown", To = "PhantomWalkie", Chance = 0.25f, MinTier = SanityTier.Uneasy,
+        new Link { From = "LostTime", Trigger = "shown", To = "PhantomWalkie", Chance = 0.5f, MinTier = SanityTier.Uneasy,
                    MinDelay = 3f, MaxDelay = 6f, Play = (p, _, _, _) => PlayCard("PhantomWalkie", p, SanityTier.Uneasy) },
     };
 

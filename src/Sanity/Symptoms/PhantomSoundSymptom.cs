@@ -157,6 +157,8 @@ internal sealed class PhantomSoundSymptom : Symptom
 
     internal override string ConfigKey => "PhantomSound";
 
+    internal override bool HoldsForSprint => true;
+
     internal override string Family => "sound";
 
     internal override SanityTier MinTier => SanityTier.Uneasy;
@@ -178,9 +180,9 @@ internal sealed class PhantomSoundSymptom : Symptom
         {
             return "already playing";
         }
-        if (player.isSprinting)
+        if (player.isSprinting && !SanityDirector.SprintCheckOff)
         {
-            return "busy: sprinting";   // your own footsteps drown it out
+            return SanityDirector.SprintingReason;   // your own footsteps drown it out (the director may hold it)
         }
         if (player.isInHangarShipRoom && startOfRound.hangarDoorsClosed)
         {

@@ -131,6 +131,11 @@ facility). Winning the lottery arms them, and they fire on their own when the mo
 They fire only at or below their tier, never within 5 s of another symptom you could notice, and are dropped if you
 die, the day ends, or nothing fitting comes up in time.
 
+**Held while you sprint:** phantom sounds and steps would be drowned out by your own footsteps, so one drawn while you
+sprint is held instead of skipped (`SprintHold.cs`). Like arming, the roll is spent and the director carries on. It
+plays as soon as you stop sprinting (if it still makes sense), or is dropped after 10 s. One at a time, and it doesn't
+count toward the 2 armed symptoms.
+
 **Chains:** some symptoms can bring a likely follow-up a moment later, so two things line up into "that was real":
 a rush of footsteps that reaches you can hit you, a teammate's "death" on the radio can bring dread, a sound coming
 closer can kill the lights, and lost time can be followed by a walkie click. The locked door and the vanishing item
@@ -172,10 +177,12 @@ wall muffling stay true.
 - **Phantom sound:** a real monster's sound with nothing there, only from monsters that fit this moon and where you
   are, more likely ones that are really alive, and from a different direction than a real one nearby. Distance by
   tier: Uneasy 10-16 m, Disturbed 6-11 m, Breaking 3.5-7 m (rhythmic sounds approach you at Breaking). A night monster
-  that isn't out yet is heard only about a third of the time before late afternoon. Not while you're sprinting.
+  that isn't out yet is heard only about a third of the time before late afternoon. Drawn while you sprint, it waits
+  for you to slow down (see the director).
 - **Phantom steps:** the game's own footsteps with nobody there. Uneasy: someone walking past 8-13 m away. Disturbed:
   steps following you 6-9 m behind, a beat after each of yours. Breaking: a sprint from 10-12 m that closes in to
-  1.5-2.5 m behind you. Looking toward them ends it. Never with a teammate within 15 m or while you sprint.
+  1.5-2.5 m behind you. Looking toward them ends it. Never with a teammate within 15 m. Drawn while you sprint, they
+  wait for you to slow down (see the director).
 - **Phantom walkie:** your walkie clicks on as if a teammate pressed theirs. Uneasy: silence. Disturbed: something
   faint (their footsteps, or a soft monster sound near them). Breaking: a monster sound up close, cut off, or now and
   then the static of a teammate dying. Needs another player with a walkie who isn't in plain view.
@@ -187,9 +194,18 @@ wall muffling stay true.
   ordinary door again. Never when a monster is near or fear is high.
 - **Vanishing item:** the item you're walking up to isn't there when you reach it: not drawn, no sound, nothing to grab
   or scan. Step back or look away and it's back.
-- **Lost time:** you step out of the facility after a long trip inside and the clock says it's 3-6 hours later
-  (evening, or nearly midnight), with the sky to match. A few seconds later both slide back to the real time. At most
-  once a day, on about half the days.
+- **Lost time:** you step out of the facility after a long trip inside and it's night: the clock says between 8 and
+  10 PM, the sky and light match, and the game's own music cue for a new part of the day plays. The fake clock keeps
+  running at the game's own pace (it's always the real time plus a fixed jump). After 12 s the clock and sky slide
+  back to the real time.
+  - When: at least 6 real minutes after landing on a normal-length day (longer in proportion on longer days), and
+    after one unbroken visit inside of at least 3 minutes (the visit can start earlier). At most once a day, on 80% of
+    days (each player's own roll).
+  - It's applied as you go through the exit, so it's already night the moment you're outside; it never switches in
+    front of you.
+  - Never once the ship is leaving (an early-leave vote or the game's midnight warning): it isn't armed, and one
+    that's showing ends at once, so the clock never contradicts the game's "return by" message.
+  - The latest fake time is 10 PM, before the game's own "ship leaving soon" warning would appear.
 - **The Presence:** something unseen that stays around for 30-70 s and moves like a creature, along real paths at your
   pace: its footsteps, its voice (a monster that fits the moon, or "a person"), the lights flickering as it passes.
   Uneasy: it circles 8-12 m away. Disturbed: it follows 5-8 m behind. Breaking: it closes in and ends with a few things
@@ -222,8 +238,8 @@ changes before playing (its numbers must match the C# code).
 
 | Issue | Status |
 |---|---|
-| Phantom sounds and steps don't play while you sprint (your own steps would drown them out), and players sprint a lot, so many chances are lost. | Confirmed. Planned fix: wait up to a few seconds for you to slow down instead of skipping. |
-| Lost time is rare and subtle: the clock and the sky change, but it's easy to miss if you don't watch either. | Confirmed. It should come a bit more often; how to make it more noticeable (with the game's own effects only) is open. |
+| Phantom sounds and steps can't play while you sprint (your own steps would drown them out). | Now held for up to 10 s until you slow down; if you keep sprinting, that one is lost. |
+| Lost time can still be missed if you don't look at the clock or the sky. | Now always night (8-10 PM) with the game's own time-of-day music cue; needs playtesting. |
 | Phantom sounds, the phantom hit's attack sound and the Presence's masks only imitate vanilla monsters. On moons with mostly modded monsters there are fewer sounds, silent hits and more "a person" Presences. | Planned: modded monster support (reading any monster's own sounds). |
 | Vanishing item with several items in view: only one goes, which can read as a glitch, and in a cluster it can be the item next to the one you meant. | Open. Options: only lone items; the whole pile goes at Breaking; always the item your grab would pick. |
 | Some items (seen with flasks) act oddly when they vanish. | Being investigated (telemetry records which parts were hidden). |
@@ -241,9 +257,7 @@ Spitballed during development. Not built and not promised; some may never happen
 
 | Idea | Area | Notes |
 |---|---|---|
-| Hold sounds and steps while you sprint | Symptoms | See known issues. |
 | Modded monster support | Symptoms | Read any monster's sounds by name (footsteps, idle, attack); a config list to exclude some. |
-| Lost time more often, and more noticeable | Symptoms | |
 | Lying clock variants | Symptoms | Uneasy: the clock skips ahead for a moment. Disturbed: it slips or freezes for a while. Breaking: it says it's far too late, or runs backwards. |
 | Vanishing item options for piles | Symptoms | See known issues. |
 | Rare loud scare | Symptoms | A big, rare one, for example the Jester (kept out of phantom sounds for now). |
