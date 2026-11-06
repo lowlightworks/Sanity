@@ -1,0 +1,64 @@
+# The release button: Actions tab -> "Release" -> "Run workflow".
+# Builds the mod from main on GitHub's machines. With "publish" ticked it also uploads that build to Thunderstore
+# (team Lowlight) and tags the commit vX.Y.Z. Unticked, it only builds, and the package zip can be downloaded from the
+# run's page to check it first.
+# The version comes from <Version> in src/Sanity/Sanity.csproj: bump it (and CHANGELOG.md) before publishing.
+# Needs the repository secret THUNDERSTORE_TOKEN (a Thunderstore service account token for the team).
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload to Thunderstore and tag the commit (unticked: build only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # to push the version tag
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # all tags, to check the version isn't released yet
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Read the version
+        run: |
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Sanity/Sanity.csproj)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Version: $VERSION"
+
+      - name: Stop if this version is already released
+        if: ${{ inputs.publish }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::v$VERSION is already tagged. Bump <Version> in src/Sanity/Sanity.csproj first."
+            exit 1
+          fi
+
+      - name: Build (and publish)
+        run: dotnet build -c Release -p:PublishTS=${{ inputs.publish }}
+        env:
+          TCLI_AUTH_TOKEN: ${{ secrets.THUNDERSTORE_TOKEN }}
+
+      - name: Keep the package zip on the run's page
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lowlight-Sanity-${{ env.VERSION }}
+          path: artifacts/thunderstore/*.zip
+
+      - name: Tag the released commit
+        if: ${{ inputs.publish }}
+        run: |
+          git config user.name "Lowlight"
+          git config user.email "113970657+lowlightworks@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Sanity $VERSION"
+          git push origin "v$VERSION"
