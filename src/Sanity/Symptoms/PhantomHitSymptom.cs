@@ -6,18 +6,19 @@ using static System.FormattableString;
 
 namespace Sanity.Symptoms;
 
-// Phantom hits. Something hits you: an attack sound behind you (a monster that attacks without killing outright,
-// MonsterSoundCatalog.Attackers), then that monster's own hit, once: the damage it really does in the game (Hits).
-// With the Presence it's the Presence's mask; after a rush of footsteps it's a person (a shovel's 20). A monster that
-// only kills, or hits for more than can be shown, doesn't fake a hit. The hit is the game's own hit package: the HUD
-// hit animation and red tint, the damage sound, visor cracks, a camera shake (big for hits of 20 or more), the body
-// flinch, and a fear spike. The health it takes is shown as gone (the HUD, and HUD mods that draw health: LethalHUD,
-// GeneralImprovements, show your real health minus this lost amount), held for 10 s after the hit, then it creeps
-// back 5 HP a second, five times the game's own regeneration (it must come back, but not so fast it looks fake). Real
-// damage stacks on top (real 100, 25 lost: shows 75; a real 20 hit: real 80, shows 55) and restarts the 10 s hold;
-// real healing raises the shown value by the same amount. It never shows below 26 (the game's critical-injury effects
-// start under 20, and we don't fake those): if real damage would take it there, the lie shrinks instead, and at real
-// health under 26 the truth shows. Cleared when you die, leave the moon or are revived.
+// Phantom hits. Something hits you, never out of silence: an attack sound behind you (no sound, no hit; a monster that
+// attacks without killing outright, MonsterSoundCatalog.Attackers), then that monster's own hit, once: the damage it
+// really does in the game (Hits). With the Presence it's the Presence's mask, right after its step behind you; after a
+// rush of footsteps it's a person (a shovel's 20). A monster that only kills, or hits for more than can be shown,
+// doesn't fake a hit. The hit is the game's own hit package: the HUD hit animation and red tint, the damage sound,
+// visor cracks, a camera shake (big for hits of 20 or more), the body flinch, and a fear spike sized to the hit (0.6
+// from 30 damage, 0.45 around 20, 0.3 for 10 or less). The health it takes is shown as gone (the HUD, and HUD mods that
+// draw health: LethalHUD, GeneralImprovements, show your real health minus this lost amount), held for 10 s after the
+// hit, then it creeps back 5 HP a second, five times the game's own regeneration (it must come back, but not so fast it
+// looks fake). Real damage stacks on top (real 100, 25 lost: shows 75; a real 20 hit: real 80, shows 55) and restarts
+// the 10 s hold; real healing raises the shown value by the same amount. It never shows below 26 (the game's critical-
+// injury effects start under 20, and we don't fake those): if real damage would take it there, the lie shrinks instead,
+// and at real health under 26 the truth shows. Cleared when you die, leave the moon or are revived.
 // Real health is never touched: nothing other players or mods can see changes.
 internal sealed class PhantomHitSymptom : Symptom
 {
@@ -26,12 +27,17 @@ internal sealed class PhantomHitSymptom : Symptom
     private const int BigShakeFrom = 20;                // hits this big shake the camera hard
     private const float RealDamageQuietSeconds = 30f;   // no real damage for this long
     private const float HighFear = 0.4f;                // the game's own "high fear" line
-    private const float HitFear = 0.45f;                // the spike when the hit lands
+    // The fear spike when the hit lands, by how hard it hit: a big hit is terrifying, a scratch is a jolt.
+    private const int HardHit = 30;                     // thumper, hoarding bug, hygrodere
+    private const float HardHitFear = 0.6f;             // the game's level for spotting a Bracken
+    private const float HitFear = 0.45f;                // around 20 (baboon hawk, a person): where high fear starts
+    private const int LightHit = 10;                    // snare flea, butler, sapsucker, puma
+    private const float LightHitFear = 0.3f;
     private const float CauseLead = 0.5f;               // the cause sound comes this long before the hit
     private const float CauseMinDistance = 2f;
     private const float CauseMaxDistance = 3.5f;
-    private const float FlinchSyncHold = 1.2f;          // your animation updates to others wait this long after a flinch
-    private const float HoldSeconds = 10f;              // shown as lost this long after the last phantom hit or real damage
+    private const float FlinchSyncHold = 1.2f;          // your animation updates to others wait this long after it
+    private const float HoldSeconds = 10f;              // shown as lost this long after a phantom hit or real damage
     private const float CreepSeconds = 0.2f;            // then 1 HP back this often: 5x the game's own regen (1 HP/s)
 
     // What a phantom hit can imitate when there's no attack sound to name it: a person (the shovel's hit).
@@ -98,6 +104,13 @@ internal sealed class PhantomHitSymptom : Symptom
 
     internal static int Lost => lost;
 
+    // Whether a hit imitating this one could land right now (for the Presence, before it steps up behind you).
+    internal bool CanHitAs(PlayerControllerB player, string imitating)
+    {
+        return CantPlayReason(player).Length == 0 && Hits.TryGetValue(imitating, out int damage)
+            && damage <= Shown(player.health) - LowestShownHealth;
+    }
+
     // While true, the game's per-frame sync of your body animation to other players waits (PlayerControllerBPatch),
     // so the fake flinch stays on your screen. Ordinary updates resume right after (a delay of about a second).
     internal static bool HoldAnimationSync => Time.time < flinchUntil;
@@ -155,8 +168,8 @@ internal sealed class PhantomHitSymptom : Symptom
         return Start(player, tier, withCause: true, why: "");
     }
 
-    // Also used by chains and the Presence, without a cause sound: "imitating" names what hits you (the Presence's
-    // mask, or a person after a rush of footsteps).
+    // Also used by chains and the Presence, which play their own sound first: "imitating" names what hits you (the
+    // Presence's mask, or a person after a rush of footsteps).
     internal bool Start(PlayerControllerB player, SanityTier tier, bool withCause, string why, string imitating = Person)
     {
         HUDManager hud = HUDManager.Instance;
@@ -176,11 +189,18 @@ internal sealed class PhantomHitSymptom : Symptom
         }
 
         // The attack sound picks the monster (only ones whose hit fits); with no sound, it's a person's hit.
+        // A hit never comes out of silence: on its own it needs its attack sound (no sound, no hit); from a chain or
+        // the Presence, the sound came just before (the rush of steps, the Presence's step behind you).
         string cause = why;
         if (withCause)
         {
             cause = PlayCause(player, room, out string monster);
-            who = monster.Length > 0 ? monster : Person;
+            if (monster.Length == 0)
+            {
+                LastFailure = $"no attack sound could play ({cause})";
+                return false;
+            }
+            who = monster;
         }
         if (!Hits.TryGetValue(who, out int damage) || damage > room)
         {
@@ -293,7 +313,7 @@ internal sealed class PhantomHitSymptom : Symptom
             }
             hud.ShakeCamera(damage >= BigShakeFrom ? ScreenShakeType.Big : ScreenShakeType.Small);
             Flinch(player, damage);
-            FearSpike(player);
+            FearSpike(player, damage >= HardHit ? HardHitFear : damage <= LightHit ? LightHitFear : HitFear);
 
             if (breaking)
             {
@@ -335,17 +355,17 @@ internal sealed class PhantomHitSymptom : Symptom
     }
 
     // The hit comes with a spike like a real attack's (tagged as ours: no sanity drop for it).
-    private static void FearSpike(PlayerControllerB player)
+    private static void FearSpike(PlayerControllerB player, float level)
     {
         StartOfRound startOfRound = StartOfRound.Instance;
-        if (startOfRound == null || startOfRound.fearLevel >= HitFear)
+        if (startOfRound == null || startOfRound.fearLevel >= level)
         {
             return;
         }
         SanityMeter.PhantomJump = true;
         try
         {
-            player.JumpToFearLevel(HitFear);
+            player.JumpToFearLevel(level);
         }
         finally
         {

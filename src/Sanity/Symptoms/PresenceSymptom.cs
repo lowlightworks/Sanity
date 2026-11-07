@@ -788,9 +788,7 @@ internal sealed class PresenceSymptom : Symptom
             {
                 0 => PlayIf(() => FlickerSymptom.FlickNow(player, SanityTier.Breaking), "lights"),
                 1 => PlayCard("PhantomDread", player) ? "dread" : "",
-                2 => SanityDirector.Find("PhantomHit") is PhantomHitSymptom hit && hit.CantPlayReason(player).Length == 0
-                     && hit.Start(player, SanityTier.Breaking, withCause: false, why: "the presence",
-                                  mask != null ? mask.Name : PhantomHitSymptom.Person) ? "hits" : "",
+                2 => HitFromBehind(player),
                 3 => SpeakNow(player),
                 _ => LastSteps(player),
             };
@@ -803,6 +801,20 @@ internal sealed class PresenceSymptom : Symptom
         Note("set piece: " + (done.Length > 0 ? done : "nothing could play"));
         SanityDirector.Peak("presence");
         End("set piece");
+    }
+
+    // A step right behind you, then its hit (as its mask: a monster's own hit, or a person's). Only if that hit can
+    // land.
+    private static string HitFromBehind(PlayerControllerB player)
+    {
+        string imitating = mask != null ? mask.Name : PhantomHitSymptom.Person;
+        if (!(SanityDirector.Find("PhantomHit") is PhantomHitSymptom hit) || !hit.CanHitAs(player, imitating)
+            || LastSteps(player).Length == 0)
+        {
+            return "";
+        }
+        return hit.Start(player, SanityTier.Breaking, withCause: false, why: "the presence, right behind you", imitating)
+            ? "hits" : "";
     }
 
     private static string SpeakNow(PlayerControllerB player)

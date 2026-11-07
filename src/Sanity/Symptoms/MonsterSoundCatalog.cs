@@ -212,12 +212,12 @@ internal static class MonsterSoundCatalog
         },
     };
 
-    // Phantom hit's cause: an AGGRESSIVE sound, only from monsters that really attack you and whose attack doesn't
-    // kill outright (damage per hit in game version 81). Each sound is the one the monster makes as it attacks or
-    // charges, played the way it plays it. Left out: one-hit kills (eyeless dog, forest giant, earth leviathan,
-    // Jester, Bracken, Nutcracker's shotgun, Barber, Maneater, kidnapper fox, circuit bees, Masked, Old Bird),
-    // near-lethal single hits that don't fit 8-15 per hit (bunker spider 90, Coilhead 90), the Hygrodere (not
-    // threatening), monsters that don't attack you (manticoil, locusts, tulip snake; spore lizard only bites when
+    // Phantom hit's cause: an AGGRESSIVE sound, only from monsters that really attack you and whose attack doesn't kill
+    // outright (damage per hit in game version 81). Each sound is the one the monster makes as it attacks or charges,
+    // played the way it plays it. Left out: one-hit kills (eyeless dog, forest giant, earth leviathan, Jester, Bracken,
+    // Nutcracker's shotgun, Barber, Maneater, kidnapper fox, circuit bees, Masked, Old Bird), hits too big to show
+    // above 26 health (bunker spider 90, Coilhead 90), the Hygrodere (no attack sound: it can only hit as the
+    // Presence's mask), monsters that don't attack you (manticoil, locusts, tulip snake; spore lizard only bites when
     // cornered), and the Butler (its 10-damage stabs make no sound of their own). Modded monsters are skipped.
     internal static readonly MonsterEntry[] Attackers =
     {
