@@ -617,7 +617,8 @@ internal static class DayStats
             && p.isPlayerControlled && !p.isPlayerDead);
     }
 
-    private static string Source(string found, bool vanilla) => found.Length > 0 ? found : vanilla ? "vanilla" : ContentInfo.Unknown;
+    // Vanilla content is always "vanilla" (LethalLevelLoader names the game itself as its source too).
+    private static string Source(string found, bool vanilla) => vanilla ? "vanilla" : found.Length > 0 ? found : ContentInfo.Unknown;
 
     // Re-reads the day's context (see the fields). A value that can't be read right now keeps the last one read.
     private static void ReadContext()

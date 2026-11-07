@@ -81,8 +81,16 @@ internal static class ContentInfo
             {
                 return "";
             }
-            object? source = ReadInstance(content, "ContentSourceName");
-            return source is string text && text.Length > 0 ? Clean(text) : "";
+            // The mod it came from: its ModName (from the mod's own LethalLevelLoader info), else the older
+            // contentSourceName field.
+            foreach (string name in new[] { "ModName", "contentSourceName" })
+            {
+                if (ReadInstance(content, name) is string text && text.Trim().Length > 0)
+                {
+                    return Clean(text);
+                }
+            }
+            return "";
         }
         catch (Exception)
         {

@@ -3,6 +3,15 @@
 The technical version of [CHANGELOG.md](../CHANGELOG.md): what changed, with the numbers and where it lives in the
 code. For how everything works now, see [design.md](design.md).
 
+## 0.0.4 (unreleased)
+
+### Fixed
+- **Modded moon and interior sources** (`ContentInfo.cs`): the stats asked LethalLevelLoader for `ContentSourceName`,
+  which doesn't exist (the field is `contentSourceName`), so every modded moon and interior was sent as "unknown".
+  Now it reads the content's `ModName` (the mod's own name), then `contentSourceName`. Vanilla content is always
+  "vanilla".
+- **Tools** (`statsdata.py`): a stats export without its header row (a sheet set up or edited by hand) is read too.
+
 ## 0.0.3 (2026-11-07)
 
 ### New
