@@ -3,9 +3,18 @@
 > **Note:** like the code, this document was written with AI help and hasn't been reviewed by an experienced
 > programmer. It's checked against the code, but small errors are possible; the code is the final word.
 
-This describes what the mod does and why, as it is now. The code has the same descriptions at the top of each file;
-the comment at the top of `src/Sanity/Plugin.cs` is a map of where everything lives. What changed in each version, in
-the same detail: [CHANGELOG-detailed.md](CHANGELOG-detailed.md).
+The full reference for Sanity: what the mod does and why, as it is now, in detail (the README is the short version
+for players). The code has the same descriptions at the top of each file; the comment at the top of
+`src/Sanity/Plugin.cs` is a map of where everything lives. What changed in each version, in the same detail:
+[CHANGELOG-detailed.md](CHANGELOG-detailed.md).
+
+**Contents:** [What it is](#what-it-is) · [Goals](#goals) · [Rules the mod follows](#rules-the-mod-follows) ·
+[How symptoms should feel](#how-symptoms-should-feel) · [The sanity meter](#the-sanity-meter-sanitymetercs) ·
+[The director](#the-director-sanitydirectorcs-directorlayerscs) · [Symptoms](#symptoms-symptoms) ·
+[Settings](#settings) · [Compatibility](#compatibility) · [Testing tools](#testing-tools-all-off-by-default) ·
+[Anonymous stats and the development log](#anonymous-stats-and-the-development-log) ·
+[Building from source](#building-from-source) · [Known issues and limitations](#known-issues-and-limitations) ·
+[Ideas and plans](#ideas-and-plans)
 
 ## What it is
 
@@ -193,12 +202,14 @@ wall muffling stay true.
 - **Phantom walkie:** your walkie clicks on as if a teammate pressed theirs. Uneasy: silence. Disturbed: something
   faint (their footsteps, or a soft monster sound near them). Breaking: a monster sound up close, cut off, or now and
   then the static of a teammate dying. Needs another player with a walkie who isn't in plain view.
-- **Phantom hit:** an attack sound behind you, then that monster's own hit, with the damage it really does in the
-  game (hoarding bug 30, thumper 40, hygrodere 35, baboon hawk 20, snare flea, butler and giant sapsucker 10, puma 7;
-  a person, after a rush of footsteps or as the Presence's mask, 20). One hit. Monsters that only kill don't fake
-  hits. The game's own hit effects: HUD, damage sound, visor
-  cracks, camera shake (big from 20 up), flinch. The lost health shows on your HUD (and HUD mods), holds for 10 s,
-  then creeps back. Real health is never touched, and it never shows below 26.
+- **Phantom hit:** an attack sound behind you, then that monster's own hit, with the damage it really does in the game
+  (hoarding bug 30, thumper 40, hygrodere 35, baboon hawk 20, snare flea, butler and giant sapsucker 10, puma 7; a
+  person, after a rush of footsteps or as the Presence's mask, 20). One hit, never out of silence: on its own it
+  needs its attack sound, and the Presence's comes right after its step behind you. Monsters that only kill don't
+  fake hits.
+  The game's own hit effects: HUD, damage sound, visor cracks, camera shake (big from 20 up), flinch, and a fear spike
+  sized to the hit (0.6 from 30 damage, 0.45 around 20, 0.3 for 10 or less). The lost health shows on your HUD (and
+  HUD mods), holds for 10 s, then creeps back. Real health is never touched, and it never shows below 26.
 - **Locked door:** the door you reach is locked, though it isn't really. The game and mods treat it exactly like a
   locked door (text, icon, Locksmith's lockpicking). Use a key on it and the key is gone. Look away and it's an
   ordinary door again. Never when a monster is near or fear is high.
@@ -220,6 +231,33 @@ wall muffling stay true.
   pace: its footsteps, its voice (a monster that fits the moon, or "a person"), the lights flickering as it passes.
   Uneasy: it circles 8-12 m away. Disturbed: it follows 5-8 m behind. Breaking: it closes in and ends with a few things
   in a row. Turn toward it and it goes quiet, then speaks. It's never seen, and a teammate coming close scares it off.
+
+## Settings
+
+In `BepInEx/config/Lowlight.Sanity.cfg`, or in game with LethalConfig.
+
+| Section / setting | Default | What it does |
+|---|---|---|
+| General / EnableMod | on | Master switch. Off: sanity stays at 100, no symptoms. |
+| Symptoms / (one per symptom) | on | Off: that symptom never happens on its own (the debug menu can still fire it). |
+| Tuning / DrainMultiplier | 1 | How fast sanity drops (also scales the instant drops). |
+| Tuning / RecoveryMultiplier | 1 | How fast it comes back. |
+| Tuning / PhantomLoudness | 1 | How loud phantom steps and sounds are (2 = louder, 0.5 = quieter). |
+| Weather / Overrides | empty | Replace any weather's numbers: `Name=outside/inside/nightHeadStart;...` (see the meter). |
+| Stats / ShareAnonymousStats | on | The anonymous stats (see below). |
+| Development / DetailedTestLog | off | The detailed local log, for playtesting (see below). |
+| Debug / ShowSanityReadout, EnableDebugKeys, ShowPresence | off | The testing tools (see below). |
+
+## Compatibility
+
+- Health displays: LethalHUD and GeneralImprovements draw the phantom hit's lost health too (`Compat/`).
+- Lategame Upgrades: Locksmith can pick the fake locked door; speed upgrades and longer days are measured, not assumed
+  (`DayLength.cs`).
+- Weathers: names come from WeatherRegistry when it's installed (Wesley's Weathers, by Magic_Wesley, and most other
+  weather mods use it). Wesley's Weathers has its own numbers; other modded weathers count as clear unless set in
+  `Weather/Overrides`.
+- Modded moons and interiors work. Phantom sounds, the hit's attack sound and the Presence's masks only imitate vanilla
+  monsters for now (see the known issues).
 
 ## Testing tools (all off by default)
 
@@ -272,13 +310,24 @@ Nothing in it is sent. Its rows:
 formula to test tuning changes before playing (exactly), or estimates them from the stats' time budgets (roughly). Its
 numbers must match the C# code.
 
+## Building from source
+
+Needs the .NET 10 SDK.
+
+1. Copy `Config.Build.user.props.template` to `Config.Build.user.props` and set your BepInEx folder (for a mod
+   manager profile, the profile's `BepInEx` folder).
+2. `dotnet build -c Release`. The DLL is copied into that BepInEx `plugins` folder automatically, and a Thunderstore
+   zip is made in `artifacts/thunderstore/`.
+
+Where to start reading the code: the comment at the top of `src/Sanity/Plugin.cs`.
+
 ## Known issues and limitations
 
 | Issue | Status |
 |---|---|
 | Phantom sounds and steps can't play while you sprint (your own steps would drown them out). | Now held for up to 10 s until you slow down; if you keep sprinting, that one is lost. |
 | Lost time can still be missed if you don't look at the clock or the sky. | Now always night (8-10 PM) with the game's own time-of-day music cue; needs playtesting. |
-| Phantom sounds, the phantom hit's attack sound and the Presence's masks only imitate vanilla monsters. On moons with mostly modded monsters there are fewer sounds, silent hits and more "a person" Presences. | Planned: modded monster support (reading any monster's own sounds). |
+| Phantom sounds, the phantom hit's attack sound and the Presence's masks only imitate vanilla monsters. On moons with mostly modded monsters there are fewer sounds, fewer hits and more "a person" Presences. | Planned: modded monster support (reading any monster's own sounds). |
 | Vanishing item with several items in view: only one goes, which can read as a glitch, and in a cluster it can be the item next to the one you meant. | Open. Options: only lone items; the whole pile goes at Breaking; always the item your grab would pick. |
 | Some items (seen with flasks) act oddly when they vanish. | Being investigated (the development log records which parts were hidden). |
 | The Presence may come too often for how little it does, and "a person" says nothing when you turn to it. | Open. Ideas: lower its weight; a few quick steps moving off when looked at. |
@@ -317,10 +366,11 @@ Spitballed during development. Not built and not promised; some may never happen
 | Smarter picks | Director | Choose the symptom that makes the most sense, not only by chance. |
 | Frequency dial and daily budget | Director | One overall dial that keeps the curve's shape; a soft budget per day. |
 | Symptoms that cost sanity | Meter | |
-| More inputs to the meter | Meter | Darkness inside, line of sight for company, more teammates together, moon difficulty. |
+| More inputs to the meter | Meter | Darkness inside (beyond the apparatus), line of sight for company, more teammates together, moon difficulty. |
 | A hard mode | Meter | Slower fall but harder recovery, to compare with the current one. |
 | Fairer loot sharing | Meter | Split by how much of the trip each hauler carried it. |
 | Effects that are actually dangerous | Gameplay | A later phase; everything is harmless for now. |
 | A recap after each round | Gameplay | What you experienced, revealed afterwards. |
 | Sync settings with the host | Multiplayer | So a group plays with the same tuning. |
+| Spectating | Multiplayer | Planned (0.0.4 or later): dead players hear and see what the player they watch goes through (sounds at the same spots, heard from their own free camera; the lights; the item vanishing), blending into vanilla spectating. Needs the mod's own messages, so every player needs the mod. |
 | Automatic builds and releases | Tooling | A GitHub Action that builds and uploads a release. |

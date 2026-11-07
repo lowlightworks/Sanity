@@ -3,7 +3,7 @@
 The technical version of [CHANGELOG.md](../CHANGELOG.md): what changed, with the numbers and where it lives in the
 code. For how everything works now, see [design.md](design.md).
 
-## 0.0.3 (unreleased)
+## 0.0.3 (2026-11-07)
 
 ### New
 - **Phantom hits imitate the monster** (`PhantomHitSymptom.cs`). The attack sound picks the monster, only among those
@@ -12,7 +12,10 @@ code. For how everything works now, see [design.md](design.md).
   hygrodere 35, baboon hawk 20, snare flea 10, butler 10, giant sapsucker 10, puma 7. "A person" hits for 20 (a
   shovel): the hit after a rush of phantom steps (chain), and the Presence's finale when its mask is a person. The
   Presence wearing a monster hits as that monster; bunker spider and coilhead (90, more than can be shown above 26)
-  and monsters that only kill don't fake hits, so the Presence picks another finale. Camera shake is big from 20 up.
+  and monsters that only kill don't fake hits, so the Presence picks another finale. A hit never comes out of
+  silence: on its own it needs its attack sound (it used to fall back to a silent "person" hit), and the Presence's
+  comes right after its step behind you. Camera shake is big from 20 up;
+  the fear spike is sized to the hit (0.6 from 30 damage, 0.45 around 20, 0.3 for 10 or less; it was 0.45 always).
   Replaces 1-3 hits (2-4 at Breaking) of 8-15 each. A Breaking hit still counts as a peak for the director.
 - **Apparatus pulled** (`SanityMeter.OnPowerOff`, `Patches/ApparatusPatch.cs`). On the game's radiation warning (it
   plays a moment after the power is cut for good, on every player's HUD, and only for the apparatus): an instant drop
@@ -60,6 +63,10 @@ code. For how everything works now, see [design.md](design.md).
   without the player's name, players written as their lobby slot (P1, P2...). Also switchable in the F7 menu's Tools
   tab. The recording behind it runs when either the log or the stats is on; only the log writes a file. Its DAY_END
   `day_length` is -1 when the clock didn't move enough to measure.
+
+- **Docs**: the README is cut down to what a player needs (the anonymous stats field list stays in full);
+  `docs/design.md` is the full reference, with a contents list and new Settings, Compatibility and Building from
+  source sections. The public changelog is sorted into New / Changed / Fixed; this file holds the technical details.
 
 ### Fixed
 - **Day length** (`DayLength.cs`): measured against the vanilla pace (a clock day of 1080 game units at the game's

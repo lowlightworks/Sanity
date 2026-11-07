@@ -7,7 +7,7 @@
     <!-- The display name. -->
     <AssemblyTitle>Sanity</AssemblyTitle>
     <!-- The version: plain x.y.z (Thunderstore and BepInEx need that). Goes up only when publishing. -->
-    <Version>0.0.2</Version>
+    <Version>0.0.3</Version>
   </PropertyGroup>
 
   <!-- AI disclosure, as Thunderstore asks of AI-made mods. -->
