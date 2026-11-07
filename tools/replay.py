@@ -1,14 +1,18 @@
 """Re-run recorded telemetry through the sanity formula, to test tuning changes before playing.
 
 Usage (from the repo folder):
-    python tools/replay.py path/to/Sanity_Telemetry/*.csv
+    python tools/replay.py path/to/telemetry/*.csv
     python tools/replay.py FILES... --set CompanyDrainMultiplier=0.7 --set ShipGainDayOpen=0.4
+    python tools/replay.py stats.csv --set InsideDrain=0.4      (the anonymous stats export: a rough estimate)
 
-What it does: takes every logged second (inside, ship, company, time of day, fear) and every logged
+Detailed local logs (the development setting) get an exact replay; the anonymous stats export has no per-second
+trace, so it gets a rough estimate from each day's time budget instead (stats_day_rates).
+
+What it does with local logs: takes every logged second (inside, ship, company, time of day, fear) and every logged
 event (damage, fear jumps, teammate deaths, loot payouts), and recomputes sanity with the numbers in TUNING below.
 It assumes people would have played the same way, which is roughly fair because the meter is hidden.
 
-KEEP IN SYNC: TUNING mirrors src/Sanity/SanityMeter.cs and SanityDirector.cs, WEATHER mirrors Weather.cs. Update it whenever the
+KEEP IN SYNC: TUNING mirrors src/Sanity/SanityMeter.cs, SanityReliefs.cs and SanityDirector.cs, WEATHER mirrors Weather.cs. Update it whenever the
 C# formula or numbers change, or the replay stops matching the game.
 
 Works with old CSVs too: company comes from the logged yes/no flag unless the file has the
@@ -30,6 +34,8 @@ import math
 import random
 import re
 from collections import Counter, defaultdict
+
+from statsdata import is_stats_file, load_stats
 
 TUNING = {
     # tiers (lines below Calm, Uneasy, Disturbed) and deadband
@@ -414,6 +420,58 @@ def estimate_rolls(trace, T, runs=40):
     return hits / runs / days
 
 
+def stats_day_rates(p, T):
+    """Rough drain and gain for one stats packet (player-day), from its time budget. The packets have no per-second
+    trace, so this uses averages: the spiral at half strength for a median-length trip, night drain at half its
+    maximum for the evening, fear at a typical level. Good for the direction and size of a change, not exact numbers."""
+    t = p.get("time_s", {})
+    alive = max(1.0, float(p.get("alive_s", 0)))
+    company = T["CompanyDrainMultiplier"]
+    trip = float(p.get("trips", {}).get("median_s", 0))
+    spiral = 1 + (T["SpiralMaxMultiplier"] - 1) * min(1.0, trip / T["SpiralSeconds"]) / 2
+    inside_rate = min(T["InsideDrain"] * spiral, T["InsideDrainCap"])
+    inside = (t.get("inside_alone", 0) + t.get("inside_company", 0) * company) * inside_rate
+    outside = (t.get("outside_alone", 0) + t.get("outside_company", 0) * company) * T["OutsideDrain"]
+    outdoors = (t.get("outside_alone", 0) + t.get("outside_company", 0) + t.get("ship", 0)) / alive
+    night = t.get("evening", 0) * outdoors * T["NightDrainMax"] / 2
+    fear = t.get("fear", 0) * T["FearDrainMax"] * 0.35
+    lobby = lobby_multiplier(int(p.get("players", 1)) or 1, T)
+    drain = (inside + outside + night) * lobby + fear
+    reliefs = p.get("reliefs", {})
+    gain = (t.get("ship", 0) * T["ShipGainDayOpen"] + reliefs.get("regroup", 0) * T["RegroupRelief"]
+            + reliefs.get("breather", 0) * T["BreatherRelief"] + reliefs.get("found", 0) * T["GrabRelief"]
+            + p.get("loot", {}).get("sanity", 0) * T["LootPool"] / 50.0)
+    return drain, gain
+
+
+def replay_stats(paths, T, keep_debug):
+    """The stats export: rough drain and gain per player-day with the current numbers and with --set changes."""
+    packets, notes = load_stats(paths, keep_debug)
+    print(f"stats export: {notes}")
+    if not packets:
+        return
+    base = [stats_day_rates(p, TUNING) for p in packets]
+    new = [stats_day_rates(p, T) for p in packets]
+    n = len(packets)
+
+    def mean(values):
+        return sum(values) / n
+    d0, g0 = mean([d for d, _ in base]), mean([g for _, g in base])
+    d1, g1 = mean([d for d, _ in new]), mean([g for _, g in new])
+    print("rough estimate per player-day (sanity points): drain, gain, net")
+    print(f"  current numbers:  {d0:7.1f} {g0:7.1f} {g0 - d0:+7.1f}")
+    if T != TUNING:
+        change = (d1 - d0) / d0 * 100 if d0 else 0.0
+        print(f"  with your --set:  {d1:7.1f} {g1:7.1f} {g1 - d1:+7.1f}   (drain {change:+.0f}%)")
+    split = Counter()
+    for p in packets:
+        split.update(p.get("tiers_s", {}))
+    whole = sum(split.values()) or 1
+    print("  recorded tier split (calm/uneasy/disturbed/breaking %): "
+          + "/".join(f"{100 * split[k] / whole:.0f}" for k in ("calm", "uneasy", "disturbed", "breaking")))
+    print("  (a more negative net means more time in the low tiers; the detailed local logs give an exact replay)")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("files", nargs="+", help="telemetry CSVs (globs allowed)")
@@ -423,6 +481,7 @@ def main():
                         help="players per day for old files without a players column (default 4)")
     parser.add_argument("--fair-share-from", metavar="FILE", default=None,
                         help="re-price every file's loot with this file's daily fair share (e.g. the host's CSV)")
+    parser.add_argument("--keep-debug", action="store_true", help="stats export: keep days played with debug tools")
     parser.add_argument("--ignore-session", action="store_true",
                         help="ignore the dials and weather overrides recorded in each file's SESSION row")
     args = parser.parse_args()
@@ -438,6 +497,12 @@ def main():
     paths = sorted({p for pattern in args.files for p in glob.glob(pattern)})
     if not paths:
         raise SystemExit("No files matched.")
+    stats_paths = [p for p in paths if is_stats_file(p)]
+    if stats_paths:
+        replay_stats(stats_paths, T, args.keep_debug)
+        paths = [p for p in paths if p not in stats_paths]
+        if not paths:
+            return
 
     random.seed(1)
     names = ["Calm", "Uneasy", "Disturbed", "Breaking"]

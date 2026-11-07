@@ -236,3 +236,6 @@ CLAUDE.local.md
 .claude/
 docs/ai/
 docs/devlog.md
+
+# Python cache from the tools
+__pycache__/
