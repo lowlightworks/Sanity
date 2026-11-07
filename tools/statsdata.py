@@ -1,17 +1,28 @@
 """Reading the anonymous stats: the spreadsheet the stats endpoint fills (downloaded as CSV).
 
 Each row is one player's day: a few plain columns (received, schema, mod, session, day, moon, players) and the whole
-packet as JSON in the "json" column. Used by analyze.py and replay.py; not run on its own.
+packet as JSON in the last column ("json"). The header row is optional (a sheet set up by hand has none). Used by
+analyze.py and replay.py; not run on its own.
 """
 import csv
 import json
 
 
 def is_stats_file(path):
-    """True for a stats export (a "json" column), False for a detailed local log."""
+    """True for a stats export, False for a detailed local log. An export has a "json" column, or (when the sheet
+    was set up without a header row) a packet as the last cell of its first row."""
     with open(path, newline="", encoding="utf-8") as f:
-        header = next(csv.reader(f), [])
-    return "json" in header
+        first = next(csv.reader(f), [])
+    return "json" in first or _packet(first) is not None
+
+
+def _packet(row):
+    """The packet in a row's last cell, or None."""
+    try:
+        packet = json.loads(row[-1]) if row else None
+    except ValueError:
+        return None
+    return packet if isinstance(packet, dict) and "schema" in packet else None
 
 
 def load_stats(paths):
@@ -22,18 +33,21 @@ def load_stats(paths):
     duplicates = broken = 0
     for path in paths:
         with open(path, newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                try:
-                    packet = json.loads(row.get("json", ""))
-                except ValueError:
-                    broken += 1
-                    continue
-                key = (packet.get("session"), packet.get("day"))
-                if key in seen:
-                    duplicates += 1
-                    continue
-                seen.add(key)
-                packets.append(packet)
+            rows = list(csv.reader(f))
+        if rows and "json" in rows[0]:
+            column = rows[0].index("json")
+            rows = [row[column:column + 1] for row in rows[1:]]
+        for row in rows:
+            packet = _packet(row)
+            if packet is None:
+                broken += 1
+                continue
+            key = (packet.get("session"), packet.get("day"))
+            if key in seen:
+                duplicates += 1
+                continue
+            seen.add(key)
+            packets.append(packet)
     touched = sum(1 for p in packets if meter_touched(p))
     tooled = sum(1 for p in packets if test_tools(p))
     notes = (f"{len(packets)} player-days ({duplicates} duplicates and {broken} unreadable skipped; {touched} with the "
