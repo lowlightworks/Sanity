@@ -7,13 +7,17 @@ of it: they're not in the Thunderstore package and the game never runs them.
 
 | | Development log | Anonymous stats |
 |---|---|---|
-| Setting | `EnableTelemetry` (off) | `ShareAnonymousStats` (on; a one-time notice on the main menu offers to turn it off) |
+| Setting | `DetailedTestLog` (off) | `ShareAnonymousStats` (on; a one-time notice on the main menu offers to turn it off) |
 | Where | a CSV per game launch in the mod's folder, `telemetry/` | one row per player-day in the stats spreadsheet |
 | Detail | everything, every second | a daily summary (fields listed in the main README) |
 | Used for | testing with your own group; exact replays | pooled numbers from everyone who shares; rough replays |
 
 To read the stats, download the spreadsheet as CSV (File, Download, Comma-separated values) and pass that file to the
-scripts. Duplicates and days played with the debug tools are left out automatically (`--keep-debug` keeps them).
+scripts. Duplicates are skipped; no day is thrown away. A day where the debug menu changed the meter or the director
+(set or froze sanity, paused it, ignored its checks) is left out of only those numbers (time per tier, symptom rates,
+the drain estimate) and used for everything else. Forced plays never reach the counts, and the readout, debug keys
+and Presence marker change nothing. Days with a test tool installed (Imperium, UnityExplorer) are kept and counted:
+they can explain odd values such as a day length of -1 or no monsters.
 
 ## Requirements
 
@@ -58,7 +62,6 @@ shows how a `--set` change would move them. It gives the direction and rough siz
 | `--players N` | Lobby size for old logs that didn't record it (default 4). |
 | `--fair-share-from FILE` | Price everyone's loot with this log's count of the day's scrap (use the host's file). |
 | `--ignore-session` | Ignore the multipliers and weather overrides each log recorded. |
-| `--keep-debug` | Stats export: keep days played with the debug tools. |
 
 `replay.py` has its own copy of the mod's numbers: `TUNING` mirrors `SanityMeter.cs`, `SanityReliefs.cs` and
 `SanityDirector.cs`, and `WEATHER` mirrors `Weather.cs`. When a number or formula changes in the C# code, change it

@@ -6,100 +6,138 @@ using UnityEngine.UI;
 
 namespace Sanity;
 
-// The anonymous-stats notice: a small panel in the bottom-right corner of the main menu, shown once (and again only
+// The anonymous-stats notice: a small box in the bottom-right corner of the main menu, shown once (and again only
 // when what's collected changes: StatsUploader.NoticeVersion), never in a game. Sharing is on by default, but nothing
-// is sent until this notice has been shown. It's built from the game's own menu parts (the menu font and colour, and
-// copies of the game's own menu button), so it looks like the rest of the menu. Keep sharing / Turn off set config
-// Stats/ShareAnonymousStats; "What's sent?" opens the README's list of fields. It stays until a choice is made or the
-// menu goes away (hosting or joining a game). If anything it needs is missing, there's simply no panel, the notice
-// counts as not shown, and nothing is sent.
+// is sent until this notice has been on screen. It uses the game's own menu font and colour: an orange border and
+// orange text, no fill (so it looks right however the menu draws its colours). Keep sharing / Turn off set config
+// Stats/ShareAnonymousStats and close it; "What's sent?" opens the README's list of fields.
+// It waits until the main menu is free (its buttons showing, no loading screen, none of the game's own popups), then
+// counts as seen. It closes when you click Keep sharing or Turn off, click any of the menu's own buttons, the menu
+// moves on (another screen, the loading screen, a popup), or after ShowSeconds. If anything it needs is missing,
+// there's simply no notice, it doesn't count as seen, and nothing is sent.
 internal static class StatsPanel
 {
     private const string FieldsUrl = "https://github.com/lowlightworks/Sanity#anonymous-stats";
-    private static readonly Vector2 PanelSize = new Vector2(440f, 168f);
+    private const float ShowSeconds = 30f;
+    private const float Width = 380f;
+    private const float Height = 124f;
     private const float Margin = 24f;
-    private const float Padding = 14f;
-    private const float ButtonHeight = 26f;
+    private const float Padding = 12f;
+    private const float BorderWidth = 2f;
+    private const float ButtonHeight = 20f;
+    private const float ButtonGap = 22f;
 
     private static GameObject? panel;
-    private static TextMeshProUGUI? status;
 
-    // Called when the main menu opens: shows the notice if it hasn't been shown yet (and sharing is on).
+    // Called when the main menu opens: builds the notice if it hasn't been seen yet (and sharing is on).
     internal static void Show(MenuManager menu)
     {
-        if (menu.isInitScene || !StatsUploader.Available || StatsUploader.NoticeSeen || !Plugin.ShareStats.Value)
+        if (panel != null || menu.isInitScene || !StatsUploader.Available || StatsUploader.NoticeSeen || !Plugin.ShareStats.Value)
         {
             return;
         }
 
         try
         {
-            if (Build(menu))
-            {
-                StatsUploader.MarkNoticeSeen();
-            }
+            Build(menu);
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"Stats panel: couldn't build it ({e.GetType().Name}: {e.Message}). The setting still works from the config.");
-            if (panel != null)
-            {
-                UnityEngine.Object.Destroy(panel);
-            }
-            panel = null;
+            Plugin.Log.LogWarning($"Stats notice: couldn't build it ({e.GetType().Name}: {e.Message}). The setting still works from the config.");
+            Close();
         }
     }
 
-    // True once the panel is on screen.
-    private static bool Build(MenuManager menu)
+    // Closes the notice, if it's open (safe to call any time).
+    internal static void Close()
+    {
+        if (panel != null)
+        {
+            UnityEngine.Object.Destroy(panel);
+        }
+        panel = null;
+    }
+
+    private static void Build(MenuManager menu)
     {
         TextMeshProUGUI gameText = menu.menuNotificationText;
-        Button gameButton = menu.menuNotification.GetComponentInChildren<Button>(true);
-        Transform parent = menu.menuNotification.transform.parent;
-        if (gameText == null || gameButton == null || parent == null)
+        Transform? parent = menu.menuNotification != null ? menu.menuNotification.transform.parent : null;
+        if (gameText == null || parent == null)
         {
-            return false;
+            return;
         }
         Color accent = gameText.color;
 
-        panel = new GameObject("Sanity.StatsPanel", typeof(RectTransform), typeof(Image), typeof(Outline));
+        panel = new GameObject("Sanity.StatsNotice", typeof(RectTransform), typeof(CanvasGroup));
         RectTransform rect = (RectTransform)panel.transform;
         rect.SetParent(parent, worldPositionStays: false);
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0f);
         rect.anchoredPosition = new Vector2(-Margin, Margin);
-        rect.sizeDelta = PanelSize;
+        rect.sizeDelta = new Vector2(Width, Height);
+        rect.localScale = Vector3.one;
         rect.SetAsLastSibling();
-        panel.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.92f);
-        Outline outline = panel.GetComponent<Outline>();
-        outline.effectColor = accent;
-        outline.effectDistance = new Vector2(2f, -2f);
 
-        Label(gameText, "Sanity shares anonymous stats", 17f, FontStyles.Bold, new Vector2(Padding, -Padding), 24f);
-        Label(gameText,
+        // Hidden until the menu is free (NoticeLife shows it).
+        CanvasGroup group = panel.GetComponent<CanvasGroup>();
+        group.alpha = 0f;
+        group.interactable = false;
+        group.blocksRaycasts = false;
+
+        BorderLine(accent, new Vector2(0f, 1f), new Vector2(1f, 1f));   // top
+        BorderLine(accent, new Vector2(0f, 0f), new Vector2(1f, 0f));   // bottom
+        BorderLine(accent, new Vector2(0f, 0f), new Vector2(0f, 1f));   // left
+        BorderLine(accent, new Vector2(1f, 0f), new Vector2(1f, 1f));   // right
+
+        Label(gameText, accent, "Sanity shares anonymous stats", 15f, FontStyles.Bold, -Padding, 20f);
+        Label(gameText, accent,
             "To help tune the mod, it sends one small summary per in-game day: numbers only, no names, no IDs. "
-            + "You can turn it off now, or any time in the config.",
-            13f, FontStyles.Normal, new Vector2(Padding, -Padding - 26f), 64f);
-        status = Label(gameText, "", 13f, FontStyles.Italic, new Vector2(Padding, -Padding - 92f), 20f);
+            + "You can turn it off here, or any time in the config.",
+            12f, FontStyles.Normal, -Padding - 24f, 48f);
 
-        float width = (PanelSize.x - Padding * 2f - 16f) / 3f;
-        Button(gameButton, "[ Keep sharing ]", new Vector2(Padding, Padding), width, () => Choose(true));
-        Button(gameButton, "[ Turn off ]", new Vector2(Padding + width + 8f, Padding), width, () => Choose(false));
-        Button(gameButton, "[ What's sent? ]", new Vector2(Padding + (width + 8f) * 2f, Padding), width, () => Application.OpenURL(FieldsUrl));
-        return true;
+        float x = Padding;
+        x += Button(gameText, accent, "[ Keep sharing ]", x, () => Choose(true)) + ButtonGap;
+        x += Button(gameText, accent, "[ Turn off ]", x, () => Choose(false)) + ButtonGap;
+        Button(gameText, accent, "[ What's sent? ]", x, () => Application.OpenURL(FieldsUrl));
+
+        // Any of the menu's own buttons closes it (host, join, settings, quit...).
+        foreach (Button button in parent.root.GetComponentsInChildren<Button>(true))
+        {
+            if (!button.transform.IsChildOf(panel.transform))
+            {
+                button.onClick.AddListener(Close);
+            }
+        }
+
+        NoticeLife life = panel.AddComponent<NoticeLife>();
+        life.Menu = menu;
+        life.Group = group;
     }
 
-    // A button was clicked: save the choice and say what it is now.
     private static void Choose(bool share)
     {
         Plugin.ShareStats.Value = share;
-        if (status != null)
-        {
-            status.text = share ? "Sharing. Thank you!" : "Off. Nothing will be sent.";
-        }
+        Close();
     }
 
-    // A text line in the game's own menu font and colour.
-    private static TextMeshProUGUI Label(TextMeshProUGUI style, string text, float size, FontStyles fontStyle, Vector2 topLeft, float height)
+    // A thin line along one edge of the box.
+    private static void BorderLine(Color color, Vector2 anchorMin, Vector2 anchorMax)
+    {
+        GameObject go = new GameObject("Border", typeof(RectTransform), typeof(Image));
+        RectTransform rect = (RectTransform)go.transform;
+        rect.SetParent(panel!.transform, worldPositionStays: false);
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+        bool horizontal = anchorMin.y == anchorMax.y;
+        rect.sizeDelta = horizontal ? new Vector2(0f, BorderWidth) : new Vector2(BorderWidth, 0f);
+        Image image = go.GetComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
+    // A text line in the game's own menu font, its top at the given distance from the top of the box.
+    private static void Label(TextMeshProUGUI style, Color color, string text, float size, FontStyles fontStyle, float top, float height)
     {
         GameObject go = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
         RectTransform rect = (RectTransform)go.transform;
@@ -107,42 +145,94 @@ internal static class StatsPanel
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(0f, 1f);
-        rect.anchoredPosition = topLeft;
+        rect.anchoredPosition = new Vector2(Padding, top);
         rect.sizeDelta = new Vector2(-Padding * 2f, height);
 
         TextMeshProUGUI label = go.GetComponent<TextMeshProUGUI>();
         label.font = style.font;
-        label.color = style.color;
+        label.color = color;
         label.fontSize = size;
         label.fontStyle = fontStyle;
         label.enableWordWrapping = true;
         label.alignment = TextAlignmentOptions.TopLeft;
         label.raycastTarget = false;
         label.text = text;
-        return label;
     }
 
-    // A copy of the game's own menu button, with our own text and action. Returns its label.
-    private static TextMeshProUGUI Button(Button template, string text, Vector2 bottomLeft, float width, UnityAction onClick)
+    // A text button along the bottom of the box, as wide as its text; brighter when the mouse is over it. Returns its
+    // width.
+    private static float Button(TextMeshProUGUI style, Color color, string text, float left, UnityAction onClick)
     {
-        GameObject go = UnityEngine.Object.Instantiate(template.gameObject, panel!.transform, worldPositionStays: false);
-        go.name = "Button";
-        go.SetActive(true);
+        GameObject go = new GameObject("Button", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(Button));
         RectTransform rect = (RectTransform)go.transform;
+        rect.SetParent(panel!.transform, worldPositionStays: false);
+
+        TextMeshProUGUI label = go.GetComponent<TextMeshProUGUI>();
+        label.font = style.font;
+        label.fontSize = 12f;
+        label.enableWordWrapping = false;
+        label.alignment = TextAlignmentOptions.MidlineLeft;
+        label.color = Color.white;   // the button's colours below tint it
+        label.raycastTarget = true;
+        label.text = text;
+        float width = Mathf.Ceil(label.GetPreferredValues(text).x) + 2f;
+
         rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.zero;
-        rect.anchoredPosition = bottomLeft;
+        rect.anchoredPosition = new Vector2(left, Padding);
         rect.sizeDelta = new Vector2(width, ButtonHeight);
-        rect.localScale = Vector3.one;
 
         Button button = go.GetComponent<Button>();
-        button.onClick = new Button.ButtonClickedEvent();
+        button.targetGraphic = label;
+        button.navigation = new Navigation { mode = Navigation.Mode.None };
+        ColorBlock colors = button.colors;
+        colors.normalColor = color;
+        colors.highlightedColor = Color.Lerp(color, Color.white, 0.6f);
+        colors.pressedColor = Color.white;
+        colors.selectedColor = color;
+        colors.colorMultiplier = 1f;
+        colors.fadeDuration = 0.05f;
+        button.colors = colors;
         button.onClick.AddListener(onClick);
+        return width;
+    }
 
-        TextMeshProUGUI label = go.GetComponentInChildren<TextMeshProUGUI>(true);
-        label.text = text;
-        label.fontSize = 13f;
-        label.enableAutoSizing = false;
-        label.enableWordWrapping = false;
-        return label;
+    // Shows the notice once the menu is free, counts it as seen, and closes it when the menu moves on or time is up.
+    private sealed class NoticeLife : MonoBehaviour
+    {
+        internal MenuManager? Menu;
+        internal CanvasGroup? Group;
+        private bool shown;
+        private float shownFor;
+
+        private void Update()
+        {
+            if (Menu == null || Group == null)
+            {
+                Close();
+                return;
+            }
+
+            bool menuFree = Menu.menuButtons != null && Menu.menuButtons.activeInHierarchy
+                && (Menu.loadingScreen == null || !Menu.loadingScreen.activeInHierarchy)
+                && (Menu.menuNotification == null || !Menu.menuNotification.activeInHierarchy);
+            if (!shown)
+            {
+                if (menuFree)
+                {
+                    shown = true;
+                    Group.alpha = 1f;
+                    Group.interactable = true;
+                    Group.blocksRaycasts = true;
+                    StatsUploader.MarkNoticeSeen();
+                }
+                return;
+            }
+
+            shownFor += Time.unscaledDeltaTime;
+            if (!menuFree || shownFor >= ShowSeconds)
+            {
+                Close();
+            }
+        }
     }
 }

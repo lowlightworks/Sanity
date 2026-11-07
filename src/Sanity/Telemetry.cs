@@ -12,7 +12,7 @@ using static System.FormattableString;
 namespace Sanity;
 
 // Records this player's sanity, and everything that changes it. Runs when either of these is on:
-//   - the local log (config Telemetry/EnableTelemetry, a development setting): one CSV file per game launch in the
+//   - the local log (config Development/DetailedTestLog, for playtesting): one CSV file per game launch in the
 //     mod's own folder, "telemetry/". Players are written as their lobby slot (P1, P2, ...), never by name. Nothing in
 //     it is sent anywhere.
 //   - the anonymous stats (StatsUploader): every event below is also handed to DayStats, which builds the day's small
@@ -79,7 +79,7 @@ internal static class Telemetry
     private static int dayLevelItems;
     private static string dayScrapSource = "";
     private static float dayLootSanity;
-    private static float dayLengthFactor = 1f;
+    private static float dayLengthFactor = -1f;   // -1 until the clock has moved enough to measure
     private static Vector3 lastPosition;
     private static bool hasLastPosition;
 
@@ -186,7 +186,7 @@ internal static class Telemetry
         dayLevelItems = LootRecovery.LevelItems;
         dayScrapSource = LootRecovery.CountSource;
         dayLootSanity = LootRecovery.GainedToday;
-        dayLengthFactor = DayLength.Factor;
+        dayLengthFactor = DayLength.Measured ? DayLength.Factor : -1f;   // -1: the clock hasn't moved enough to tell
 
         TrackMovement(player, dt);
         DetectGrabs(player);
@@ -537,6 +537,7 @@ internal static class Telemetry
     {
         "GeneralImprovements", "LethalHUD", "MoreShipUpgrades", "WeatherRegistry", "GoodItemScan", "CullFactory",
         "ReservedItemSlot", "LethalLevelLoader", "MoreCompany", "LateCompany",
+        "Imperium", "UnityExplorer",   // test tools: they can stop the clock or the spawns, so odd days can be explained
     };
 
     // The watched mods that are installed, for the stats (plugin ids only matched, nothing else read).

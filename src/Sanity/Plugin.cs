@@ -103,17 +103,17 @@ public partial class Plugin : BaseUnityPlugin
 
         // Off by default. A development setting for playtests (also switchable in the F7 debug menu's Tools tab).
         TelemetryEnabled = Config.Bind(
-            "Telemetry",
-            "EnableTelemetry",
+            "Development",
+            "DetailedTestLog",
             false,
-            "Development: keep a detailed log of each game (sanity every second, every event) as a CSV file in the mod's own folder, under telemetry/. Players appear as P1, P2... Local only: nothing in it is sent anywhere.");
+            "For playtesting the mod, not for normal play. Writes a detailed log of every game (sanity every second, every event) to a CSV file on this computer, in the mod's folder under telemetry/, for the mod's own analysis tools. Players appear as P1, P2... Nothing in it is ever sent anywhere. (Separate from ShareAnonymousStats.)");
 
         // The anonymous stats: on by default; nothing is sent until the player has seen the notice on the main menu.
         ShareStats = Config.Bind(
             "Stats",
             "ShareAnonymousStats",
             true,
-            "Send one small anonymous summary per in-game day, to help tune the mod: numbers only (time in each sanity level, which symptoms happened and how people reacted, moon, group size). No names, no IDs. Nothing is sent until you've seen the notice on the main menu (whether you've seen it is kept in the game's own settings, not here, so a modpack's config can't skip it for you). The last 10 sent are kept in stats/sent/ in the mod's folder, so you can read them. Full list of fields in the README.");
+            "Send the mod's author one small anonymous summary per in-game day over the internet, to help tune the mod: numbers only (time in each sanity level, which symptoms happened and how people reacted, moon, group size). No names, no IDs. Nothing is sent until you've seen the notice on the main menu (whether you've seen it is kept in the game's own settings, not here, so a modpack's config can't skip it for you). The last 10 sent are kept in stats/sent/ in the mod's folder, so you can read them. Full list of fields in the README.");
 
         PhantomAudio.Loudness = Config.Bind(
             "Tuning",

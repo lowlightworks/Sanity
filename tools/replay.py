@@ -35,13 +35,15 @@ import random
 import re
 from collections import Counter, defaultdict
 
-from statsdata import is_stats_file, load_stats
+from statsdata import is_stats_file, load_stats, meter_touched
 
 TUNING = {
     # tiers (lines below Calm, Uneasy, Disturbed) and deadband
     "Tier1": 75.0, "Tier2": 52.0, "Tier3": 25.0, "TierDeadband": 3.0,
     # drains per second
     "InsideDrain": 0.36, "SpiralMaxMultiplier": 1.5, "SpiralSeconds": 240.0, "InsideDrainCap": 0.495,
+    "PowerOffInsideMultiplier": 1.75,   # inside drain and cap once the apparatus is pulled (APPARATUS_PULLED)
+    "PowerOffDropInside": 10.0, "PowerOffDropElsewhere": 4.0,   # the instant drop at that moment
     "SpiralDecaySeconds": 15.0, "SpiralDecayCurve": 3.0,
     "OutsideDrain": 0.1, "NightDrainMax": 0.4, "SundownStart": 0.63, "MidnightStart": 0.9,
     "FearDrainMax": 0.5, "FearDrainStart": 0.1,
@@ -165,6 +167,9 @@ def instant_drops(rows, T, fair_override=None):
             drops.append([r["day"], t, "far", 0.0])
         elif ev == "REVIVED":
             drops.append([r["day"], t, "revive", T["RevivedSanity"]])
+        elif ev == "APPARATUS_PULLED":
+            inside = "(inside)" in detail
+            drops.append([r["day"], t, "fixed", T["PowerOffDropInside"] if inside else T["PowerOffDropElsewhere"]])
         elif ev == "LOOT_RECOVERY":
             m = re.search(r"value (\d+) fair share ([\d.]+) full [\d.]+ share (\d+)%", detail)
             if not m:
@@ -232,6 +237,7 @@ def replay_file(path, T, players_default=None, fair_override=None, use_session=T
     last_grab_relief = -1e9
     lengths = day_lengths(samples, T)
     DAY_FACTORS.update({(path, d): f for d, f in lengths.items()})
+    power_off_at = {r["day"]: float(r["t"]) for r in rows if r["kind"] == "E" and r["event"] == "APPARATUS_PULLED"}
     day = None
     for r in samples:
         t = float(r["t"])
@@ -290,7 +296,8 @@ def replay_file(path, T, players_default=None, fair_override=None, use_session=T
             spiral = at_exit * fade(out_s / T["SpiralDecaySeconds"], T["SpiralDecayCurve"])
         ship_s = ship_s + dt if ship else 0.0
 
-        p_inside = T["InsideDrain"] * lerp(1, T["SpiralMaxMultiplier"], spiral / T["SpiralSeconds"]) * w_in if inside else 0.0
+        w_in_now = w_in * (T["PowerOffInsideMultiplier"] if t >= power_off_at.get(r["day"], 1e18) else 1.0)
+        p_inside = T["InsideDrain"] * lerp(1, T["SpiralMaxMultiplier"], spiral / T["SpiralSeconds"]) * w_in_now if inside else 0.0
         p_outside = T["OutsideDrain"] * w_out if (not inside and not ship) else 0.0
         p_night = T["NightDrainMax"] * exposure * w_out if (not inside and (not ship or not doors)) else 0.0
         p_fear = T["FearDrainMax"] * inv_lerp(T["FearDrainStart"], 1.0, fear)
@@ -313,7 +320,7 @@ def replay_file(path, T, players_default=None, fair_override=None, use_session=T
             p_outside *= T["CompanyDrainMultiplier"]
             p_night *= T["CompanyDrainMultiplier"]
             p_ship *= T["CompanyGainMultiplier"]
-        p_inside = min(p_inside, T["InsideDrainCap"] * w_in)
+        p_inside = min(p_inside, T["InsideDrainCap"] * w_in_now)
         # lobby size scales the three company-softened drains, after the cap (fear untouched)
         p_inside *= lobby
         p_outside *= lobby
@@ -444,10 +451,12 @@ def stats_day_rates(p, T):
     return drain, gain
 
 
-def replay_stats(paths, T, keep_debug):
-    """The stats export: rough drain and gain per player-day with the current numbers and with --set changes."""
-    packets, notes = load_stats(paths, keep_debug)
+def replay_stats(paths, T):
+    """The stats export: rough drain and gain per player-day with the current numbers and with --set changes. Days
+    where the debug menu changed the meter are left out (their drain isn't the formula's)."""
+    packets, notes = load_stats(paths)
     print(f"stats export: {notes}")
+    packets = [p for p in packets if not meter_touched(p)]
     if not packets:
         return
     base = [stats_day_rates(p, TUNING) for p in packets]
@@ -481,7 +490,6 @@ def main():
                         help="players per day for old files without a players column (default 4)")
     parser.add_argument("--fair-share-from", metavar="FILE", default=None,
                         help="re-price every file's loot with this file's daily fair share (e.g. the host's CSV)")
-    parser.add_argument("--keep-debug", action="store_true", help="stats export: keep days played with debug tools")
     parser.add_argument("--ignore-session", action="store_true",
                         help="ignore the dials and weather overrides recorded in each file's SESSION row")
     args = parser.parse_args()
@@ -499,7 +507,7 @@ def main():
         raise SystemExit("No files matched.")
     stats_paths = [p for p in paths if is_stats_file(p)]
     if stats_paths:
-        replay_stats(stats_paths, T, args.keep_debug)
+        replay_stats(stats_paths, T)
         paths = [p for p in paths if p not in stats_paths]
         if not paths:
             return

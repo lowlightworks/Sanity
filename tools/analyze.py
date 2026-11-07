@@ -19,7 +19,7 @@ import re
 import statistics
 from collections import Counter, defaultdict
 
-from statsdata import get, is_stats_file, load_stats
+from statsdata import get, is_stats_file, load_stats, meter_touched, test_tools
 
 TIERS = ["Calm", "Uneasy", "Disturbed", "Breaking"]
 
@@ -269,8 +269,12 @@ def summarise(path, show_days):
 
     hits = [r for r in events if r["event"] == "PHANTOM_HIT"]
     if hits:
-        counts = [int(float(r["value"])) for r in hits]
-        print(f"phantom hits: {len(hits)} episodes, hits per episode {dict(sorted(Counter(counts).items()))}, "
+        # 0.0.3 on: one hit, "as <monster> hit <damage>"; older logs: "x<count> hits ...".
+        kinds = Counter()
+        for r in hits:
+            m = re.match(r"as (.+?) hit (\d+)", r["detail"])
+            kinds[f"{m.group(1)} {m.group(2)}" if m else f"old: {int(float(r['value']))} hits"] += 1
+        print(f"phantom hits: {len(hits)}, as {dict(kinds.most_common(10))}, "
               f"ended: {dict(Counter(r['detail'] for r in events if r['event'] == 'PHANTOM_HIT_END'))}")
         healed = [r for r in events if r["event"] == "PHANTOM_HIT_HEALED"]
         print(f"  crept back fully: {len(healed)} (the rest cleared by death, leaving or the day ending)")
@@ -472,12 +476,17 @@ def summarise_opportunities(all_events, all_samples):
               f" -> projected chance it fires before its {'wait' if wait < 900 else 'day'} ends once armed: {100 * p:.0f}%")
 
 
-def summarise_stats(paths, per_moon, keep_debug):
-    """The anonymous stats export: pooled numbers over every player-day."""
-    packets, notes = load_stats(paths, keep_debug)
+def summarise_stats(paths, per_moon):
+    """The anonymous stats export: pooled numbers over every player-day. The meter and director numbers (tier split,
+    symptom rates, lost time) use only the days the debug menu didn't touch ("steady"); everything else uses all."""
+    packets, notes = load_stats(paths)
     print(f"=== anonymous stats: {notes}")
     if not packets:
         return
+    steady = [p for p in packets if not meter_touched(p)]
+    tooled = Counter(tool for p in packets for tool in test_tools(p))
+    if tooled:
+        print(f"kept, with a test tool installed (odd values may come from it: day_length -1, no monsters): {dict(tooled)}")
 
     def count(key):
         return Counter(str(get(p, *key.split("."), default="unknown")) for p in packets)
@@ -495,9 +504,9 @@ def summarise_stats(paths, per_moon, keep_debug):
         whole = sum(total.values()) or 1
         return "/".join(f"{100 * total[t] / whole:.0f}" for t in ("calm", "uneasy", "disturbed", "breaking"))
 
-    print(f"tier split (calm/uneasy/disturbed/breaking %): all {tier_split(packets)}")
+    print(f"tier split (calm/uneasy/disturbed/breaking %, {len(steady)} steady days): all {tier_split(steady)}")
     by_players = defaultdict(list)
-    for p in packets:
+    for p in steady:
         by_players[get(p, "players")].append(p)
     for n in sorted(by_players):
         print(f"  {n} players ({len(by_players[n])} days): {tier_split(by_players[n])}")
@@ -506,16 +515,16 @@ def summarise_stats(paths, per_moon, keep_debug):
     print("moons (days):", dict(moons.most_common(12)))
     if per_moon:
         for moon, _ in moons.most_common(12):
-            print(f"  {moon}: {tier_split([p for p in packets if get(p, 'moon', 'name', default='unknown') == moon])}")
+            print(f"  {moon}: {tier_split([p for p in steady if get(p, 'moon', 'name', default='unknown') == moon])}")
     modded = Counter(f"{get(p, kind, 'name', default='?')} [{get(p, kind, 'source', default='?')}]"
                      for p in packets for kind in ("moon", "interior") if not get(p, kind, "vanilla", default=True))
     if modded:
         print("modded moons/interiors (days):", dict(modded.most_common(10)))
 
-    hours = alive / 3600 or 1
-    print("symptoms (played per alive hour | totals: played armed held dropped failed | played by tier):")
+    hours = sum(get(p, "alive_s") for p in steady) / 3600 or 1
+    print("symptoms, steady days (played per alive hour | totals: played armed held dropped failed | played by tier):")
     totals = defaultdict(Counter)
-    for p in packets:
+    for p in steady:
         for key, n in get(p, "symptoms", default={}).items():
             totals[key].update(n)
     for key, n in sorted(totals.items(), key=lambda kv: -kv[1]["played"]):
@@ -548,14 +557,22 @@ def summarise_stats(paths, per_moon, keep_debug):
             print(f"phantom sounds by {field} (count, turned toward):",
                   ", ".join(f"{k} {len(v)} ({turned_rate(v)})" for k, v in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:12]))
 
-    fired = sum(1 for p in packets if get(p, "lost_time", "fired", default=False))
+    fired = sum(1 for p in steady if get(p, "lost_time", "fired", default=False))
     trips = sorted(get(p, "trips", "median_s") for p in packets if get(p, "trips", "count"))
-    print(f"lost time fired on {fired} of {len(packets)} days | median trip inside {trips[len(trips) // 2] if trips else 0} s")
+    print(f"lost time fired on {fired} of {len(steady)} steady days | median trip inside {trips[len(trips) // 2] if trips else 0} s")
     seen = Counter()
     for p in packets:
         for m in get(p, "monsters", default=[]):
             seen[f"{m.get('name')} [{m.get('source')}]"] += m.get("count", 0)
     print("monsters on the moon (total spawned):", dict(seen.most_common(15)))
+    hits = Counter()
+    for p in packets:
+        for h in get(p, "phantom_hits", default=[]):
+            hits[h.get("as")] += 1
+    pulled = [get(p, "apparatus_pulled_s", default=-1) for p in packets]
+    pulled = sorted(s for s in pulled if s is not None and s >= 0)
+    print("phantom hits by what they imitated:", dict(hits.most_common(10)) or "none",
+          f"| apparatus pulled on {len(pulled)} days" + (f" (median {pulled[len(pulled) // 2] // 60} min in)" if pulled else ""))
     errors = Counter()
     for p in packets:
         errors.update(get(p, "errors", default={}))
@@ -568,14 +585,13 @@ def main():
     parser.add_argument("files", nargs="+")
     parser.add_argument("--days", action="store_true", help="local logs: per-day table for each file")
     parser.add_argument("--per-moon", action="store_true", help="stats export: tier split per moon")
-    parser.add_argument("--keep-debug", action="store_true", help="stats export: keep days played with debug tools")
     args = parser.parse_args()
     paths = sorted({p for pattern in args.files for p in glob.glob(pattern)})
     if not paths:
         raise SystemExit("No files matched.")
     stats_paths = [p for p in paths if is_stats_file(p)]
     if stats_paths:
-        summarise_stats(stats_paths, args.per_moon, args.keep_debug)
+        summarise_stats(stats_paths, args.per_moon)
         paths = [p for p in paths if p not in stats_paths]
         if not paths:
             return

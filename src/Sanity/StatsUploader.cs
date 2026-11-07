@@ -10,10 +10,11 @@ namespace Sanity;
 
 // Sends the anonymous stats (DayStats): on by default (config Stats/ShareAnonymousStats), but only once the player has
 // been shown the notice on the main menu (StatsPanel), which offers to turn it off. Until then nothing is sent. Each
-// day's packet is saved to a small queue in the mod's own folder ("stats/queue/"), then sent in the background, one at a time, to Endpoint: a Google Apps Script that appends it as
-// one row of a spreadsheet. A packet that can't be sent (offline, game closing) waits in the queue and goes on the next
-// launch or after the next day. Each packet that was sent is moved to "stats/sent/" (the newest 10 are kept), so anyone
-// can read exactly what left their computer. Never blocks the game; fails silently.
+// day's packet is saved to a small queue in the mod's own folder ("stats/queue/"), then sent in the background, one at
+// a time, to Endpoint: a Google Apps Script that appends it as one row of a spreadsheet. A packet that can't be sent
+// (offline, game closing) waits in the queue and goes on the next launch or after the next day; turning sharing off
+// deletes what's waiting. Each packet that was sent is moved to "stats/sent/" (the newest 10 are kept), so anyone can
+// read exactly what left their computer. Never blocks the game; fails silently.
 internal sealed class StatsUploader : MonoBehaviour
 {
     // The web address of the spreadsheet's script. Empty: nothing is sent or queued.
@@ -28,6 +29,8 @@ internal sealed class StatsUploader : MonoBehaviour
     // Raise this when what's collected changes in a way players should hear about: the notice is shown again.
     private const int NoticeVersion = 1;
     private const string NoticeKey = "Lowlight.Sanity.StatsNoticeVersion";   // in the game's own saved preferences
+
+    private static readonly Encoding PlainUtf8 = new UTF8Encoding(false);   // no byte-order mark: plain JSON files
 
     private static StatsUploader? instance;
     private static bool? noticeSeen;
@@ -122,7 +125,7 @@ internal sealed class StatsUploader : MonoBehaviour
         {
             Directory.CreateDirectory(QueueFolder);
             string name = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{DayStats.SessionId}.json";
-            File.WriteAllText(Path.Combine(QueueFolder, name), packet, Encoding.UTF8);
+            File.WriteAllText(Path.Combine(QueueFolder, name), packet, PlainUtf8);
             string[] queued = Directory.GetFiles(QueueFolder, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray();
             for (int i = 0; i < queued.Length - MaxQueued; i++)
             {

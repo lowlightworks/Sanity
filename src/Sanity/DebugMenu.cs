@@ -405,8 +405,8 @@ internal sealed class DebugMenu : MonoBehaviour
         GUILayout.Label("Armed from a button: no 5 s gap or relax wait (tier still applies unless Ignore conditions).", text);
 
         GUILayout.Label("Logs and stats", heading);
-        ConfigToggle(Plugin.TelemetryEnabled, "Local log (development): a detailed CSV in the mod's folder");
-        ConfigToggle(Plugin.ShareStats, "Share anonymous stats (one summary per day)");
+        ConfigToggle(Plugin.TelemetryEnabled, "Detailed test log: a CSV on this computer, in the mod's folder (never sent)");
+        ConfigToggle(Plugin.ShareStats, "Share anonymous stats (one summary per in-game day)");
 
         GUILayout.Label("Display", heading);
         ConfigToggle(Plugin.ShowReadout, "On-screen readout");
