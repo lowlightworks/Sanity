@@ -5,6 +5,7 @@
 - The locked door and the vanishing item can now happen from Uneasy (a little less often there than lower down).
 - Lost time no longer takes one of the two slots for symptoms waiting for their moment, so it doesn't keep the
   flicker, the locked door or the vanishing item from happening.
+- A feedback form and a Discussions page for stories, ideas and questions (links in the README).
 - Fixed the day-length measurement: a normal day now reads as 1x (it read 0.71x). Lost time's "6 minutes after
   landing" now really means 6 minutes on a normal day (it came after about 4).
 

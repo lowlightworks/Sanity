@@ -29,6 +29,9 @@ warning that something is wrong.
 **Experienced modders:** if you feel like looking through the code, any help or advice is very welcome (see
 [Feedback](#feedback-and-contributing)). Otherwise, have fun, and please report what you find.
 
+**Tell us how it played:** the [feedback form](https://forms.gle/zraR8cwDnDv6Yz5a7) takes 1–2 minutes and needs no
+sign-in. Stories, ideas and questions go in [Discussions](https://github.com/lowlightworks/Sanity/discussions).
+
 ## Symptoms (spoilers)
 
 - **Flicker**: the lights flicker when one is right there (in view, or you're standing in it); at lower sanity your
@@ -104,8 +107,14 @@ All of it is welcome: bug reports, suggestions, ideas, constructive criticism, a
 does something. If you know C# or Unity modding and would like to review some of the code, that would be especially
 appreciated.
 
-The best place is the issue tracker on GitHub: [github.com/lowlightworks/Sanity/issues](https://github.com/lowlightworks/Sanity/issues).
-When reporting a bug, the BepInEx log (`BepInEx/LogOutput.log`) and what you were doing help a lot.
+| What | Where |
+|---|---|
+| How it played, quick ratings, or a quick bug report | [Feedback form](https://forms.gle/zraR8cwDnDv6Yz5a7) (1–2 minutes, no sign-in) |
+| A detailed bug report | [GitHub issues](https://github.com/lowlightworks/Sanity/issues) |
+| Moments that got you, ideas, questions | [Discussions](https://github.com/lowlightworks/Sanity/discussions) |
+
+When reporting a bug, the BepInEx log (`BepInEx/LogOutput.log`) and what you were doing help a lot. Please check it
+for personal names before sharing.
 
 ## Building from source
 
