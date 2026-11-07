@@ -4,7 +4,8 @@
 > programmer. It's checked against the code, but small errors are possible; the code is the final word.
 
 This describes what the mod does and why, as it is now. The code has the same descriptions at the top of each file;
-the comment at the top of `src/Sanity/Plugin.cs` is a map of where everything lives.
+the comment at the top of `src/Sanity/Plugin.cs` is a map of where everything lives. What changed in each version, in
+the same detail: [CHANGELOG-detailed.md](CHANGELOG-detailed.md).
 
 ## What it is
 
@@ -61,7 +62,8 @@ line, but only climb back once 3 above it, so the tier doesn't flicker at the ed
 
 **Drains**
 - Inside the facility: 0.36/s, growing to x1.5 over 4 minutes inside ("the spiral"), capped at 0.495/s. After you
-  leave, the build-up fades over 15 s, so a quick step outside doesn't reset it.
+  leave, the build-up fades over 15 s, so a quick step outside doesn't reset it. Once the apparatus is pulled (from
+  the game's radiation warning), the inside drain and its cap are x1.75 for the rest of the day.
 - Outside (not in the facility or the ship): 0.1/s at any time of day.
 - Night (outside, or in the ship with the doors open): from 0 at the start of Sundown to 0.4/s at Midnight. Adds to
   the outside drain.
@@ -98,6 +100,8 @@ line, but only climb back once 3 above it, so the tier doesn't flicker at the ed
 - Damage: 0.2 per health point lost, at most 10 per hit. Falls count half.
 - A teammate dies: -10 within 5 m of you, -5 if you're in the ship, -2 anywhere else.
 - Fear jumps to 0.4 or higher: -5, at most once every 8 s.
+- The apparatus pulled (anyone's), at the game's radiation warning: -10 inside (the lights die around you), -4
+  elsewhere (only the alarm).
 
 **Other**
 - Dead: sanity freezes. Brought back mid-round (for example by Lategame Upgrades' interns): a fresh start at 85.
@@ -189,8 +193,11 @@ wall muffling stay true.
 - **Phantom walkie:** your walkie clicks on as if a teammate pressed theirs. Uneasy: silence. Disturbed: something
   faint (their footsteps, or a soft monster sound near them). Breaking: a monster sound up close, cut off, or now and
   then the static of a teammate dying. Needs another player with a walkie who isn't in plain view.
-- **Phantom hit:** an attack sound behind you, then 1-3 hits (2-4 at Breaking) with the game's own hit effects: HUD,
-  damage sound, visor cracks, camera shake, flinch. The lost health shows on your HUD (and HUD mods), holds for 10 s,
+- **Phantom hit:** an attack sound behind you, then that monster's own hit, with the damage it really does in the
+  game (hoarding bug 30, thumper 40, hygrodere 35, baboon hawk 20, snare flea, butler and giant sapsucker 10, puma 7;
+  a person, after a rush of footsteps or as the Presence's mask, 20). One hit. Monsters that only kill don't fake
+  hits. The game's own hit effects: HUD, damage sound, visor
+  cracks, camera shake (big from 20 up), flinch. The lost health shows on your HUD (and HUD mods), holds for 10 s,
   then creeps back. Real health is never touched, and it never shows below 26.
 - **Locked door:** the door you reach is locked, though it isn't really. The game and mods treat it exactly like a
   locked door (text, icon, Locksmith's lockpicking). Use a key on it and the key is gone. Look away and it's an
@@ -228,23 +235,31 @@ wall muffling stay true.
 
 All of the mod's own files live in its own folder.
 
-**Anonymous stats** (`ShareAnonymousStats`, on by default): a one-time notice on the main menu (`StatsPanel.cs`, built
-from the game's own menu parts) says so and offers Turn off; nothing is sent until it has been shown. Whether it was
-shown is kept in the game's own saved preferences (not the config, so a shared modpack config can't skip it), and it
-shows again when `StatsUploader.NoticeVersion` goes up (raise it when what's collected changes in a way players should
-hear about). One small JSON packet per player per in-game day
+**Anonymous stats** (`ShareAnonymousStats`, on by default): one small JSON packet per player per in-game day
 (`DayStats.cs`), sent in the background when the day ends (`StatsUploader.cs`) to a Google Apps Script that appends it
-as a row of a spreadsheet (`tools/stats-endpoint/Code.gs`). Packets wait in `stats/queue/` if they can't be sent (turning sharing off deletes them), and
-the last 10 sent are kept in `stats/sent/` for the player to read. Contents, in short: build and a per-launch random code; the day's
-context (moon, interior and weather with their source mod if modded, players, host or not, day length, how it ended);
-time per tier and per place; trips inside; per-symptom counts; reactions against control moments; each phantom
-sound's monster, place and ground; monsters on the moon; real scares, damage, death and revives; loot; settings; debug use; frame rate.
-Never names, IDs, positions or times. The README lists every field. `schema` changes whenever a field changes
-meaning; unknown values are "unknown" or -1, and a failure in one part never stops the rest.
+as a row of a spreadsheet (`tools/stats-endpoint/Code.gs`).
+- The notice: a one-time box on the main menu (`StatsPanel.cs`: an orange border and text in the game's menu font)
+  says so and offers Turn off. It shows once the menu is free (no loading screen or popup) and closes on a choice, on
+  any menu button, when the menu moves on, or after 30 s. Nothing is sent until it has been on screen. Whether it was
+  shown is kept in the game's own saved preferences (not the config, so a shared modpack config can't skip it); it
+  shows again when `StatsUploader.NoticeVersion` goes up (raise it when what's collected changes in a way players
+  should hear about).
+- Sending: packets wait in `stats/queue/` if they can't be sent (turning sharing off deletes them); the last 10 sent
+  are kept in `stats/sent/` for the player to read.
+- Contents, in short: build and a per-launch random code; the day's context (moon, interior and weather with their
+  source mod if modded, players, host or not, day length, how it ended), read once a second on the moon; time per tier
+  and per place; trips inside; per-symptom counts; reactions against control moments; each phantom sound's monster,
+  place and ground (the floor under you, read when it plays) and each phantom hit's imitated monster and damage;
+  monsters on the moon; real scares, damage, death and revives; when the apparatus was pulled; loot; settings; debug
+  use; frame rate; a few watched mods, including the test tools Imperium and UnityExplorer (the day is still used,
+  but they can stop the clock or the spawns, which explains odd values). Never names, IDs, positions or times. The
+  README lists every field. `schema` changes whenever a field changes meaning; unknown values are "unknown" or -1, and
+  a failure in one part never stops the rest.
 
-**Development log** (`EnableTelemetry`, also switchable in the F7 menu's Tools tab): a detailed CSV per game launch in
-`telemetry/` inside the mod's folder. Players appear as P1, P2... The stats are built from the same events, so the
-in-memory part runs when either setting is on; the file only exists for the log. Nothing in it is sent. Its rows:
+**Development log** (`Development/DetailedTestLog`, for playtesting; also switchable in the F7 menu's Tools tab): a
+detailed CSV per game launch in `telemetry/` inside the mod's folder. Players appear as P1, P2... The stats are
+built from the same events, so the in-memory part runs when either setting is on; the file only exists for the log.
+Nothing in it is sent. Its rows:
 - The first row (SESSION) records the mod version, the config and every tuning number.
 - S rows, once a second on a moon: sanity, rate and its parts, where you are, company, fear, health, position and
   view, and more.
@@ -293,7 +308,7 @@ Spitballed during development. Not built and not promised; some may never happen
 | A lying scanner or a haunted terminal | Symptoms | Scanner mods replace scanning, so careful. |
 | Breaking distortion | Symptoms | A screen effect at the lowest tier. |
 | A glimpse of a teammate who isn't there, a fake body | Symptoms | Needs player models. |
-| Apparatus-pulled sequence | Symptoms | Something special when the apparatus is taken. |
+| Apparatus-pulled sequence | Symptoms | Something special when the apparatus is taken (the drain already rises then). |
 | Flicker improvements | Symptoms | One light or one direction instead of the whole facility; ship and exterior lights; pocketed flashlights. |
 | Faster fade after phantom fear | Symptoms | If episodes feel too long. |
 | Limits on repeats | Symptoms | Long sounds and the same monster several times in a row. |

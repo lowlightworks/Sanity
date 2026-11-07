@@ -40,7 +40,8 @@ sign-in. Stories, ideas and questions go in [Discussions](https://github.com/low
 - **Phantom sound**: a monster that could be on this moon makes a sound behind you. Nothing's there.
 - **Phantom steps**: footsteps passing, following you at your pace, or rushing up behind you.
 - **Phantom walkie**: your walkie clicks on as if a teammate pressed theirs.
-- **Phantom hit**: you get hit by nothing; the health it took comes back slowly, on your screen only.
+- **Phantom hit**: you get hit by nothing, as hard as the monster you heard would hit; the health it took comes back
+  slowly, on your screen only.
 - **Locked door**: the door you reach is locked. Use a key on it and the key is gone.
 - **Vanishing item**: the loot you're walking up to isn't there when you reach it.
 - **Lost time**: you step out of the facility after a long trip inside and it's night.
@@ -81,7 +82,7 @@ Editable in-game with LethalConfig (optional), or in `BepInEx/config/Lowlight.Sa
 | DrainMultiplier / RecoveryMultiplier | 1 | How fast sanity drops / comes back. |
 | PhantomLoudness | 1 | How loud phantom steps and sounds are (2 = louder, 0.5 = quieter). |
 | ShareAnonymousStats | on | Send one small anonymous summary per in-game day (see [Anonymous stats](#anonymous-stats)). |
-| EnableTelemetry | off | Development: a detailed local log of each game, for testing and tuning. |
+| DetailedTestLog | off | For playtesting only: a detailed log of each game on your computer (never sent). |
 | ShowSanityReadout / EnableDebugKeys | off | Testing tools: on-screen numbers, F7 debug menu, F8 random symptom. |
 | ShowPresence | off | Testing: a red ball where the Presence is. |
 
@@ -97,9 +98,9 @@ Editable in-game with LethalConfig (optional), or in `BepInEx/config/Lowlight.Sa
 ## Anonymous stats
 
 **On by default, and you're told first.** The first time you reach the main menu, a small notice in the corner says
-that Sanity shares anonymous stats, with **Turn off** right there. Nothing is sent before you've seen it. You can
-change it any time with `ShareAnonymousStats` in the config (modpack makers can set it off for their pack). The notice
-comes back only if what's collected changes.
+that Sanity shares anonymous stats, with **Turn off** right there (it closes when you choose, use the menu, or after
+30 seconds). Nothing is sent before it has been on screen. You can change it any time with `ShareAnonymousStats` in
+the config (modpack makers can set it off for their pack). The notice comes back only if what's collected changes.
 
 While it's on, the mod sends **one small summary for each in-game day**, when the ship leaves, to a spreadsheet only
 the mod's author can see. It contains numbers and game content names only:
@@ -112,17 +113,17 @@ the mod's author can see. It contains numbers and game content names only:
 | Where you spent the day | seconds inside / outside / in the ship, alone or with someone; in fear; in the evening; sprinting; dead; your trips inside |
 | Symptoms | for each one: how often it was picked, played, waited, or didn't happen, and why it couldn't play; the day's mood; how often one symptom led to another |
 | Reactions | how often players turned, stopped, sprinted or scanned after a symptom, compared with random quiet moments |
-| Phantom sounds | which monster, inside or outside, the type of ground, and whether you turned toward it or stopped |
-| The real game | which monsters were on the moon (with their mod, if modded), real scares, damage taken, cause of death, revives, loot brought back |
-| Settings | the mod's multipliers, any symptoms you switched off, whether its debug tools were used, a few compatibility-relevant mods (installed or not) |
+| Phantom sounds and hits | which monster, inside or outside, the type of ground, and whether you turned toward it or stopped; for hits, what it imitated and the health it showed as lost |
+| The real game | which monsters were on the moon (with their mod, if modded), real scares, damage taken, cause of death, revives, loot brought back, when the apparatus was pulled |
+| Settings | the mod's multipliers, any symptoms you switched off, whether its debug tools were used, whether a few compatibility-relevant mods and test tools (like Imperium) are installed |
 | Performance | average and lowest frame rate |
 
 **Never sent:** names (yours or anyone's), Steam IDs, your position, the time of day you played, your full mod list.
 The last 10 summaries sent are kept in the mod's own folder, in `stats/sent/`, so you can read exactly what left
-your computer. If it can't send (offline), the summary waits in `stats/queue/` and goes later; turning sharing off deletes anything
-still waiting. Nothing slows the game.
+your computer. If it can't send (offline), the summary waits in `stats/queue/` and goes later; turning sharing off
+deletes anything still waiting. Nothing slows the game.
 
-**Development log:** `EnableTelemetry` keeps a much more detailed log of each game (sanity every second, every event)
+**Development log:** `DetailedTestLog` keeps a much more detailed log of each game (sanity every second, every event)
 in the mod's own folder under `telemetry/`, for testing. It's never sent anywhere; players appear as P1, P2...
 `tools/analyze.py` and `tools/replay.py` read both these logs and the stats spreadsheet (see
 [tools/README.md](tools/README.md)).

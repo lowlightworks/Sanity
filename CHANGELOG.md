@@ -1,28 +1,33 @@
 # Changelog
 
+The technical details of every version are in the
+[detailed changelog](https://github.com/lowlightworks/Sanity/blob/main/docs/CHANGELOG-detailed.md).
+
 ## 0.0.3 (unreleased)
 
-- The locked door and the vanishing item can now happen from Uneasy (a little less often there than lower down).
-- Lost time no longer takes one of the two slots for symptoms waiting for their moment, so it doesn't keep the
-  flicker, the locked door or the vanishing item from happening.
-- Anonymous stats, to help tune the mod: on by default, with a one-time notice on the main menu that lets you turn
-  it off (nothing is sent before you've seen it). One small summary per in-game day goes to the mod's author: numbers
-  and game content names only, no names or IDs. Every field is listed in the README, and the last 10 sent are kept in
-  the mod's folder so you can read them.
-- The detailed log (`EnableTelemetry`, now described as a development setting) moved into the mod's own folder, under
-  `telemetry/`, and writes players as P1, P2... instead of their names. It can also be switched in the F7 debug menu.
-  Old logs in `BepInEx/Sanity_Telemetry` aren't used any more; delete that folder whenever you like.
+### New
+- Phantom hits now hit like the monster you heard: one hit, as hard as that monster really hits, with a big flinch.
+- Pulling the apparatus shakes your sanity, and the dark facility wears it down faster for the rest of the day.
+- Anonymous stats to help tune the mod. On by default, with a one-time notice on the main menu where you can turn
+  it off. Numbers only: no names, no IDs. Everything that's sent is listed in the README.
 - A feedback form and a Discussions page for stories, ideas and questions (links in the README).
-- Fixed the day-length measurement: a normal day now reads as 1x (it read 0.71x). Lost time's "6 minutes after
-  landing" now really means 6 minutes on a normal day (it came after about 4).
+
+### Changed
+- The locked door and the vanishing item can now happen at Uneasy too.
+- Lost time no longer keeps other symptoms from happening while it waits for its moment.
+- For testers: the detailed log is now the `DetailedTestLog` setting, saved in the mod's folder, without player names.
+
+### Fixed
+- The length of the day was misread (a normal day counted as shorter), so lost time came too early.
 
 ## 0.0.2 (2026-11-06)
 
-- Phantom sounds and phantom steps no longer get skipped while you sprint: they wait up to 10 s for you to slow down.
-- Lost time reworked: it's now always night when it happens (8-10 PM on the clock), the game's own music cue for a new
-  part of the day plays, and it lasts 12 s. It needs an unbroken 3-minute trip inside and at least 6 minutes since
-  landing (longer on longer days), and it can happen on more days. It's applied as you go through the exit, so it
-  never switches in front of you, and it stays out of the way once the ship is leaving.
+### New
+- Phantom sounds and footsteps no longer get skipped while you sprint: they wait until you slow down.
+
+### Changed
+- Lost time reworked: when it happens it's always night, with the game's own music for a new part of the day, and it
+  happens on more days. It switches as you step out, never in front of you, and stays away once the ship is leaving.
 - Lost time is followed by a walkie click more often.
 
 ## 0.0.1 (2026-11-06)
@@ -30,11 +35,11 @@
 First public release. Very early and still rough: it's out so it's easy to install and share, not because it's
 finished. Expect rough edges, and balance changes between versions.
 
-- Hidden sanity meter: drains inside (faster the longer you stay), outside, at night, and with fear, scaled by weather and lobby size; recovers in the ship and with loot brought home. Damage, nearby deaths and fear spikes cause instant drops.
-- Reliefs: regrouping after time alone, a breather outside after a long trip inside, finding scrap, and a bounce back out of Breaking.
-- Tiers (Calm, Uneasy, Disturbed, Breaking) with a deadband.
-- Symptom director: chance-based timing that rises with low sanity and quiet time, soft limits instead of hard cooldowns; armed symptoms that wait for the right moment; waves, day moods, chains, echoes, peaks and relax windows.
-- Symptoms: Flicker, Phantom fear, Phantom dread, Phantom sound, Phantom steps, Phantom walkie, Phantom hit, Locked door, Vanishing item, Lost time, The Presence.
-- Compatibility: GeneralImprovements and LethalHUD health/clock displays, Lategame Upgrades (Locksmith, speed, day length), Wesley's Weathers (through WeatherRegistry).
-- Config: master switch, per-symptom switches, drain/recovery multipliers, phantom loudness.
-- Testing tools (all off by default): on-screen readout, F7 debug menu, F8, local CSV telemetry (with reaction measurement and player profiles), analyze.py and replay.py.
+### New
+- A hidden sanity meter for each player: it drops when you're alone, deep in the facility, out at night or scared,
+  and comes back in the ship, with teammates and with loot.
+- Eleven symptoms that get stronger as sanity drops: flickering lights, fear with nothing there, monster sounds,
+  footsteps, walkie clicks, fake hits, a locked door, a vanishing item, lost time, and something that follows you.
+- Works with GeneralImprovements, LethalHUD, Lategame Upgrades, Wesley's Weathers and modded moons.
+- Settings: switch the mod or any symptom off, and make sanity drop or recover faster or slower.
+- Testing tools for modders and testers (all off by default).
