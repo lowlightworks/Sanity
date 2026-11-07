@@ -11,7 +11,8 @@ namespace Sanity.Symptoms;
 // that as its symptom for the roll (dip, tension and recency restart, so the overall frequency stays the director's),
 // and the symptom then waits for its moment and fires on its own. Rules for every armed symptom:
 //   - One of each kind at a time: it isn't in the lottery while armed or while it's showing. At most MaxArmed armed
-//     symptoms wait at once (2), so a third kind can't pile on.
+//     symptoms wait at once (2), so a third kind can't pile on. A symptom that waits all day for a rare moment (lost
+//     time) has a slot of its own instead (CountsTowardCap), so it never blocks the others.
 //   - It fires only while you're at or below its tier; above it, it keeps waiting.
 //   - It never fires within MinGapSeconds of another symptom you could notice (two things in the same instant read as
 //     a pattern). Its own arming doesn't count (it's invisible).
@@ -107,7 +108,7 @@ internal abstract class ArmedSymptom : Symptom
             return "already showing";
         }
         int waiting = ArmedCount();
-        if (waiting >= MaxArmed && !SanityDirector.ConditionsIgnored)
+        if (CountsTowardCap && waiting >= MaxArmed && !SanityDirector.ConditionsIgnored)
         {
             return Invariant($"armed cap: {waiting} already waiting");
         }
@@ -196,8 +197,8 @@ internal abstract class ArmedSymptom : Symptom
     }
 
     // For a symptom that catches its moment itself (a hook on the game's own code), so it can fire right then rather
-    // than on the next frame: the same rules as the per-frame watch (tier, gap, relax; held-back state from this frame).
-    // True = it fired.
+    // than on the next frame: the same rules as the per-frame watch (tier, gap, relax; held-back state from this
+    // frame). True = it fired.
     protected bool FireIfFree(PlayerControllerB player)
     {
         if (!armed || HeldBy.Length > 0 || player.isPlayerDead || (!Enabled && !armedByDebug))
@@ -220,13 +221,16 @@ internal abstract class ArmedSymptom : Symptom
         Telemetry.Event("SYMPTOM_DROPPED", armedFor, $"{Name} armed but never fired: {why}" + WaitSummary());
     }
 
-    // Armed symptoms of every kind waiting right now (for the cap).
+    // Whether it takes one of the MaxArmed shared slots while it waits (false: a slot of its own).
+    protected virtual bool CountsTowardCap => true;
+
+    // Armed symptoms waiting right now that take a shared slot (for the cap).
     private static int ArmedCount()
     {
         int count = 0;
         foreach (Symptom symptom in SanityDirector.Symptoms)
         {
-            if (symptom is ArmedSymptom other && other.armed)
+            if (symptom is ArmedSymptom other && other.armed && other.CountsTowardCap)
             {
                 count++;
             }

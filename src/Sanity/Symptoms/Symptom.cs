@@ -25,6 +25,9 @@ internal abstract class Symptom
     // How likely it is to be picked, compared with the other symptoms that make sense right now.
     internal virtual float BaseWeight => 1f;
 
+    // Its weight at a given tier: the base weight unless a symptom weighs differently at some tiers.
+    internal virtual float WeightAt(SanityTier tier) => BaseWeight;
+
     // Its kind, for the day's mood ("sound", "sight", "body"): a mood tilts whole families up or down.
     internal virtual string Family => "sound";
 

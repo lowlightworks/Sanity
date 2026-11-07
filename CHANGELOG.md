@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.3 (unreleased)
+
+- The locked door and the vanishing item can now happen from Uneasy (a little less often there than lower down).
+- Lost time no longer takes one of the two slots for symptoms waiting for their moment, so it doesn't keep the
+  flicker, the locked door or the vanishing item from happening.
+- Fixed the day-length measurement: a normal day now reads as 1x (it read 0.71x). Lost time's "6 minutes after
+  landing" now really means 6 minutes on a normal day (it came after about 4).
+
 ## 0.0.2 (2026-11-06)
 
 - Phantom sounds and phantom steps no longer get skipped while you sprint: they wait up to 10 s for you to slow down.

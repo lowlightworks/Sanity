@@ -102,7 +102,8 @@ line, but only climb back once 3 above it, so the tier doesn't flicker at the ed
 - Dead: sanity freezes. Brought back mid-round (for example by Lategame Upgrades' interns): a fresh start at 85.
 - Config dials: `DrainMultiplier` (also scales instant drops) and `RecoveryMultiplier`.
 - Day length (`DayLength.cs`): how long today really lasts compared with a normal day, measured from how fast the
-  clock moves. Used for telemetry and lost time's timing; drains don't depend on it.
+  clock moves. A normal (vanilla) day is 700 real seconds from landing at 7:40 AM to midnight, so 1.4 game minutes
+  pass per real second; x2 means twice as long. Used for telemetry and lost time's timing; drains don't depend on it.
 - The tuning aims at about 35% of the time Calm, 28% Uneasy, 22% Disturbed and 15% Breaking, and Breaking spells of
   one to two minutes. The numbers were fitted to playtest data with `tools/replay.py`.
 
@@ -127,7 +128,8 @@ conditions pass). The winner is accepted with a chance that's low if it played r
 same roll. If nothing plays, tension keeps building.
 
 **Armed symptoms** need a moment the director can't create (a door you look at, an item you walk up to, leaving the
-facility). Winning the lottery arms them, and they fire on their own when the moment comes. At most 2 wait at once.
+facility). Winning the lottery arms them, and they fire on their own when the moment comes. At most 2 wait at once;
+lost time, which can wait all day, has a slot of its own so it never blocks the others.
 They fire only at or below their tier, never within 5 s of another symptom you could notice, and are dropped if you
 die, the day ends, or nothing fitting comes up in time.
 
@@ -156,10 +158,10 @@ Presence's finale) the crisis passes sooner and the director rests for 50 s.
 | Phantom walkie | Uneasy | 0.8 | 150 s |
 | The Presence | Uneasy | 0.9 | 240 s |
 | Lost time (armed) | Uneasy | 3 | 600 s |
+| Locked door (armed) | Uneasy | 1 at Uneasy, 1.6 below | 300 s |
+| Vanishing item (armed) | Uneasy | 1 at Uneasy, 1.6 below | 240 s |
 | Phantom fear | Disturbed | 0.8 | 120 s |
 | Phantom hit | Disturbed | 0.8 | 180 s |
-| Locked door (armed) | Disturbed | 1.6 | 300 s |
-| Vanishing item (armed) | Disturbed | 1.6 | 240 s |
 | Phantom dread | Breaking | 0.5 | 300 s |
 
 Phantoms placed in the world (sounds, steps) come from behind or beside you, on walkable floor at about your height.

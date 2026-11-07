@@ -249,7 +249,7 @@ internal static class SanityDirector
                 if (reason.Length == 0)
                 {
                     Eligible.Add(symptom);
-                    float weight = Weight(symptom);
+                    float weight = Weight(symptom, tier);
                     totalWeight += weight;
                     RollText.Append(Invariant($" {symptom.ConfigKey}=w{weight:0.##}")).Append(HeldForSprint.Contains(symptom) ? "(sprint)" : "");
                 }
@@ -270,7 +270,7 @@ internal static class SanityDirector
             string played = "none";
             while (Eligible.Count > 0)
             {
-                Symptom chosen = Pick(totalWeight);
+                Symptom chosen = Pick(totalWeight, tier);
                 float recovery = chosen.Recovery;
                 float check = Random.value;
                 if (!GapsIgnored && check >= recovery)
@@ -297,7 +297,7 @@ internal static class SanityDirector
                     RollText.Append(' ').Append(chosen.ConfigKey).Append(":failed[").Append(chosen.LastFailure).Append(']');
                 }
 
-                totalWeight -= Weight(chosen);
+                totalWeight -= Weight(chosen, tier);
                 Eligible.Remove(chosen);
             }
 
@@ -467,9 +467,9 @@ internal static class SanityDirector
     }
 
     // A symptom's weight in today's lottery: its base weight, tilted by the day's mood for its family.
-    internal static float Weight(Symptom symptom)
+    internal static float Weight(Symptom symptom, SanityTier tier)
     {
-        return symptom.BaseWeight * DayMood.Tilt(symptom.Family);
+        return symptom.WeightAt(tier) * DayMood.Tilt(symptom.Family);
     }
 
     // The symptom with this config key (for chains), or null.
@@ -517,8 +517,8 @@ internal static class SanityDirector
         Chains.Trigger(symptom, "played");
     }
 
-    // Weighted lottery: each symptom gets a slice proportional to its base weight.
-    private static Symptom Pick(float totalWeight)
+    // Weighted lottery: each symptom gets a slice proportional to its weight at this tier.
+    private static Symptom Pick(float totalWeight, SanityTier tier)
     {
         // Rounding left nothing to share out: treat the rest as equal.
         if (totalWeight <= 0f)
@@ -529,7 +529,7 @@ internal static class SanityDirector
         float roll = Random.value * totalWeight;
         foreach (Symptom symptom in Eligible)
         {
-            roll -= Weight(symptom);
+            roll -= Weight(symptom, tier);
             if (roll <= 0f)
             {
                 return symptom;

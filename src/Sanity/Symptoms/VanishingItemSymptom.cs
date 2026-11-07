@@ -67,9 +67,13 @@ internal sealed class VanishingItemSymptom : ArmedSymptom
 
     internal override string Family => "sight";
 
-    internal override SanityTier MinTier => SanityTier.Disturbed;
+    internal override SanityTier MinTier => SanityTier.Uneasy;
 
     internal override float BaseWeight => 1.6f;
+
+    // A bit less at Uneasy (the same as the flicker, the other armed sight symptom there), so it doesn't push out the
+    // sounds that make up most of Uneasy.
+    internal override float WeightAt(SanityTier tier) => tier == SanityTier.Uneasy ? 1f : BaseWeight;
 
     internal override float RecoverySeconds => 240f;
 

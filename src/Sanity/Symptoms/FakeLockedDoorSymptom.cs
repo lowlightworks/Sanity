@@ -6,7 +6,7 @@ using static System.FormattableString;
 namespace Sanity.Symptoms;
 
 // A door that's locked, once. Armed by the director; it fires the first time you look at a closed, unlocked door
-// (inside the facility, Disturbed or lower), and that door was ALREADY locked when your cursor reached it.
+// (inside the facility, Uneasy or lower), and that door was ALREADY locked when your cursor reached it.
 //
 // Pre-locking: while it's armed and free to fire, every eligible closed door around you (within 8 m, or your reach
 // + 4 m) reads as locked ahead of time, so the first thing you see is "Locked", never an "Open" that turns "Locked"
@@ -108,9 +108,13 @@ internal sealed class FakeLockedDoorSymptom : ArmedSymptom
 
     internal override string Family => "sight";
 
-    internal override SanityTier MinTier => SanityTier.Disturbed;
+    internal override SanityTier MinTier => SanityTier.Uneasy;
 
     internal override float BaseWeight => 1.6f;
+
+    // A bit less at Uneasy (the same as the flicker, the other armed sight symptom there), so it doesn't push out the
+    // sounds that make up most of Uneasy.
+    internal override float WeightAt(SanityTier tier) => tier == SanityTier.Uneasy ? 1f : BaseWeight;
 
     internal override float RecoverySeconds => 300f;
 

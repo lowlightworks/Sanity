@@ -75,6 +75,9 @@ internal sealed class LostTimeSymptom : ArmedSymptom
     // Waits all day for its exit (the day ending drops it).
     protected override float ExpireSeconds => 1e9f;
 
+    // It can wait all day, so it has a slot of its own and never keeps the flicker, the door or the item from arming.
+    protected override bool CountsTowardCap => false;
+
     internal override string Waits => Invariant($"you leaving the facility after {MinInsideSeconds / 60f:0.#} min inside");
 
     protected override bool Showing => lying;

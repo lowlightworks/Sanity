@@ -22,11 +22,11 @@ namespace Sanity.Symptoms;
 // giant sapsucker, puma), else its own sound every few seconds as it moves (no human steps for a monster). It moves in
 // bursts like a creature: 7-14 steps then a pause; at least 5 once it starts (no 2-3 step fragments); never sprinting
 // more than 5-8 steps in a row (a long sprint unseen in any direction doesn't ring true).
-// It may also arm the locked door or the vanishing item (if they aren't already), so they get their chance while it's
-// around. Never seen: in clear view within 30 m it freezes and goes silent; seen for over a second within 15 m, it
-// relocates the next moment you're not looking. It holds the phantom-sound slot for the episode, so there are never
-// two sources of phantom footsteps at once. Ends if you die, leave, go into the ship or change area, or a teammate
-// comes within 8 m (company scares it off). Cooldown 2 minutes after an episode.
+// At Disturbed or lower it may also arm the locked door or the vanishing item (if they aren't already), so they get
+// their chance while it's around. Never seen: in clear view within 30 m it freezes and goes silent; seen for over a
+// second within 15 m, it relocates the next moment you're not looking. It holds the phantom-sound slot for the
+// episode, so there are never two sources of phantom footsteps at once. Ends if you die, leave, go into the ship or
+// change area, or a teammate comes within 8 m (company scares it off). Cooldown 2 minutes after an episode.
 // Debug: ShowPresence (config) draws a red ball where it is.
 internal sealed class PresenceSymptom : Symptom
 {
