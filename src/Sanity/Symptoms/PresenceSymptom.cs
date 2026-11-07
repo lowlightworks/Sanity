@@ -789,7 +789,8 @@ internal sealed class PresenceSymptom : Symptom
                 0 => PlayIf(() => FlickerSymptom.FlickNow(player, SanityTier.Breaking), "lights"),
                 1 => PlayCard("PhantomDread", player) ? "dread" : "",
                 2 => SanityDirector.Find("PhantomHit") is PhantomHitSymptom hit && hit.CantPlayReason(player).Length == 0
-                     && hit.Start(player, SanityTier.Breaking, withCause: false, why: "the presence") ? "hits" : "",
+                     && hit.Start(player, SanityTier.Breaking, withCause: false, why: "the presence",
+                                  mask != null ? mask.Name : PhantomHitSymptom.Person) ? "hits" : "",
                 3 => SpeakNow(player),
                 _ => LastSteps(player),
             };

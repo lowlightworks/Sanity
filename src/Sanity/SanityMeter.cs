@@ -22,6 +22,10 @@ internal static class SanityMeter
     private const float SpiralSeconds = 240f;          // time inside to reach that maximum
     private const float SpiralDecaySeconds = 15f;      // after leaving, the build-up fades to nothing over this long
     private const float SpiralDecayCurve = 3f;         // shape of that fade: holds at first, drops fastest at the end
+    private const float PowerOffInsideMultiplier = 1.75f; // the apparatus is out: the facility is dark for good
+    private const float PowerOffDropInside = 10f;      // the moment it happens: the lights die around you, the alarm
+    private const float PowerOffDropElsewhere = 4f;    // outside or in the ship: only the alarm
+    private const float PowerOffFallbackSeconds = 3f;  // no warning seen this long after the power cut: start anyway
     private const float CompanyDrainMultiplier = 0.5f;
     private const float OutsideDrain = 0.1f;           // outside the facility and the ship, any time of day
 
@@ -88,7 +92,7 @@ internal static class SanityMeter
     // Every tuning number in one line, for the telemetry session row (so each CSV says which build made it).
     internal static string TuningSummary => Invariant(
         $"tiers {TierBoundaries[0]}/{TierBoundaries[1]}/{TierBoundaries[2]} deadband {TierDeadband}; ") + Invariant(
-        $"inside {InsideDrain} x{SpiralMaxMultiplier} over {SpiralSeconds}s cap {InsideDrainCap} fade {SpiralDecaySeconds}s; outside {OutsideDrain}; night {NightDrainMax}; fear {FearDrainMax}; ") + Invariant(
+        $"inside {InsideDrain} x{SpiralMaxMultiplier} over {SpiralSeconds}s cap {InsideDrainCap} fade {SpiralDecaySeconds}s power off x{PowerOffInsideMultiplier} drop {PowerOffDropInside}/{PowerOffDropElsewhere}; outside {OutsideDrain}; night {NightDrainMax}; fear {FearDrainMax}; ") + Invariant(
         $"company x{CompanyDrainMultiplier} near {NearbyEnterRadius}/{NearbyLeaveRadius}m height {NearbyMaxHeight}m; ") + Invariant(
         $"lobby near chance {TeammateNearChance} anchor {LobbyAnchorPlayers}p x{LobbyAnchorMultiplier} range {LobbyMultiplierMin}-{LobbyMultiplierMax} (1-8 players {LobbyTable}); ") + Invariant(
         $"ship day {ShipGainDayOpen}/{ShipGainDayClosed} night {ShipGainNightOpen}/{ShipGainNightClosed} company x{CompanyGainMultiplier} ramp {ShipRampSeconds}s cap {ShipRecoveryCap} breaking x{ShipBreakingBoost}; ") + Invariant(
@@ -100,6 +104,8 @@ internal static class SanityMeter
     internal static float Rate;
     internal static SanityTier Tier = SanityTier.Calm;
     internal static bool OnMoon;
+    internal static bool PowerOff;  // the apparatus was pulled: the facility's power is off for the rest of the day
+    private static float powerCutSeenAt = -1f;
     internal static bool Frozen;    // debug: when true, nothing changes the value
 
     // Players in the game when today started, and the drain multiplier that gives (both fixed for the day).
@@ -156,6 +162,8 @@ internal static class SanityMeter
         if (startOfRound.inShipPhase || !timeOfDay.currentDayTimeStarted)
         {
             OnMoon = false;
+            PowerOff = false;
+            powerCutSeenAt = -1f;
             Weather.Reset();
             DayLength.Reset();
             SanityReliefs.Reset();
@@ -177,6 +185,21 @@ internal static class SanityMeter
         OnMoon = true;
         Weather.Tick(startOfRound);
         DayLength.Tick(timeOfDay);
+
+        // The apparatus: normally the radiation warning starts it (ApparatusPatch, OnPowerOff). If something stops
+        // that warning, the power being off for good starts it a few seconds later instead.
+        RoundManager roundManager = RoundManager.Instance;
+        if (!PowerOff && roundManager != null && roundManager.powerOffPermanently)
+        {
+            if (powerCutSeenAt < 0f)
+            {
+                powerCutSeenAt = Time.time;
+            }
+            else if (Time.time - powerCutSeenAt >= PowerOffFallbackSeconds)
+            {
+                OnPowerOff("power off for good, no warning seen");
+            }
+        }
 
         // First frame of the day: how many players are here sets today's lobby multiplier (it stays for the day).
         if (!dayStarted)
@@ -419,8 +442,10 @@ internal static class SanityMeter
         // Some weathers start partway into the night: both night drain and ship gain treat it as at least this late.
         night = Mathf.Max(night, Weather.NightHeadStart);
 
-        // Inside: base drain, growing with the spiral's clock, scaled by weather. Capped below, after company.
-        PartInside = inside ? InsideDrain * Mathf.Lerp(1f, SpiralMaxMultiplier, spiral / SpiralSeconds) * Weather.Inside : 0f;
+        // Inside: base drain, growing with the spiral's clock, scaled by weather and by the power being off for good
+        // (the apparatus pulled). Capped below, after company; the cap scales the same way.
+        float insideScale = Weather.Inside * (PowerOff ? PowerOffInsideMultiplier : 1f);
+        PartInside = inside ? InsideDrain * Mathf.Lerp(1f, SpiralMaxMultiplier, spiral / SpiralSeconds) * insideScale : 0f;
 
         // Outside (not in the facility, not in the ship): a small drain at any time of day.
         bool outside = !inside && !inShip;
@@ -460,9 +485,10 @@ internal static class SanityMeter
             PartShip *= CompanyGainMultiplier;
         }
 
-        // The inside drain never exceeds its cap (scaled by weather). Alone it reaches it before the spiral ends;
-        // with company the cap doesn't bite, so grouped drain tops out at half the uncapped value.
-        PartInside = Mathf.Min(PartInside, InsideDrainCap * Weather.Inside);
+        // The inside drain never exceeds its cap (scaled like the drain: weather, the power being off). Alone it
+        // reaches it before the spiral ends; with company the cap doesn't bite, so grouped drain tops out at half the
+        // uncapped value.
+        PartInside = Mathf.Min(PartInside, InsideDrainCap * insideScale);
 
         // Lobby size: fewer players, more time alone, so these three drains are scaled by today's lobby multiplier.
         // (After the inside cap, like the dials, so the capped drain shrinks too.) Fear is left alone.
@@ -686,6 +712,23 @@ internal static class SanityMeter
         {
             wasDead[i] = players[i] != null && players[i].isPlayerDead;
         }
+    }
+
+    // The apparatus was pulled (anyone's), at the radiation warning: an instant drop (bigger inside, where the lights
+    // just died), then the inside drain and its cap are PowerOffInsideMultiplier for the rest of the day.
+    internal static void OnPowerOff(string why)
+    {
+        if (PowerOff || !OnMoon)
+        {
+            return;
+        }
+        PowerOff = true;
+        GameNetworkManager networkManager = GameNetworkManager.Instance;
+        PlayerControllerB? player = networkManager != null ? networkManager.localPlayerController : null;
+        bool alive = player != null && !player.isPlayerDead;
+        float lost = alive ? Drop(Inside ? PowerOffDropInside : PowerOffDropElsewhere) : 0f;
+        Telemetry.Event("APPARATUS_PULLED", lost, Invariant(
+            $"{why}: the facility's power is off for good ({(Inside ? "inside" : "outside")}) sanity -{lost:F1}; inside drain x{PowerOffInsideMultiplier} from now"));
     }
 
     // An instant drop, scaled by the drain dial. Returns how much sanity was actually lost.

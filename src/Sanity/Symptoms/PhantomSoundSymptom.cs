@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using GameNetcodeStuff;
 using UnityEngine;
 using UnityEngine.AI;
+using MonsterFilter = System.Func<string, bool>;   // which monsters (by name) may be chosen
 using static System.FormattableString;
 
 namespace Sanity.Symptoms;
@@ -95,10 +96,11 @@ internal sealed class PhantomSoundSymptom : Symptom
     // without killing outright (MonsterSoundCatalog.Attackers) and fits here (this moon's spawn lists, inside/outside,
     // weighted like a phantom sound; a monster only on the night list, not alive, passes the same time-of-day odds).
     internal static bool PlayCloseOneShot(PlayerControllerB player, float minDistance, float maxDistance, out string what,
-                                          out EnemyAI? attacker)
+                                          out EnemyAI? attacker, out string monster, MonsterFilter? allow = null)
     {
         what = "none";
         attacker = null;
+        monster = "";
         PhantomSoundSymptom? self = instance;
         StartOfRound startOfRound = StartOfRound.Instance;
         if (self == null || startOfRound == null || startOfRound.currentLevel == null || RoundManager.Instance == null
@@ -109,6 +111,10 @@ internal sealed class PhantomSoundSymptom : Symptom
 
         bool inside = player.isInsideFactory;
         self.BuildCandidates(player, inside, MonsterSoundCatalog.Attackers);
+        if (allow != null)
+        {
+            self.candidates.RemoveAll(c => !allow(c.Entry.Name));
+        }
         self.candidates.RemoveAll(c => Random.value > Plausibility(c));
         if (self.candidates.Count == 0)
         {
@@ -148,6 +154,7 @@ internal sealed class PhantomSoundSymptom : Symptom
             }
             what = Invariant($"{chosen.Entry.Name} {sound.Name} {distance:F1}m {PhantomPlacement.Side(player, point)}");
             attacker = chosen.Example;
+            monster = chosen.Entry.Name;
             return true;
         }
         return false;

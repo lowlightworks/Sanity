@@ -65,6 +65,10 @@ internal static class DayStats
         internal int Stopped = -1;
     }
     private static readonly List<Sound> Sounds = new List<Sound>();
+
+    // Each phantom hit: what it imitated, and the health it showed as lost.
+    private static readonly List<(string As, int Damage)> Hits = new List<(string, int)>();
+    private static float powerOffAt = -1f;   // seconds alive on the moon when the apparatus was pulled (-1: it wasn't)
     private static Sound? justPlayed;   // the newest sound, until Reactions opens its probe and takes it
 
     // Monsters seen on the moon today: name -> (count, source).
@@ -116,6 +120,8 @@ internal static class DayStats
             ReactionCounts.Clear();
             Sounds.Clear();
             justPlayed = null;
+            Hits.Clear();
+            powerOffAt = -1f;
             Monsters.Clear();
             MonstersCounted.Clear();
             monsterTimer = 0f;
@@ -223,6 +229,7 @@ internal static class DayStats
                 case "DAMAGE": hits++; damageTaken += Mathf.Abs(value); break;
                 case "DIED": causeOfDeath = ContentInfo.Clean(detail); break;
                 case "REVIVED": revives++; break;
+                case "APPARATUS_PULLED": if (powerOffAt < 0f) powerOffAt = alive; break;
                 case "DEPOSIT": delivered++; break;
                 case "LOOT_RECOVERY": lootSanity += Mathf.Max(0f, value); break;
                 case "DEBUG": debugEvents++; break;
@@ -270,6 +277,15 @@ internal static class DayStats
             Sounds.Add(sound);
             justPlayed = sound;
         });
+    }
+
+    // Called by phantom hit when one starts. Forced plays are left out, like sounds.
+    internal static void NoteHit(string imitating, int damage)
+    {
+        if (active && Hits.Count < MaxSounds && !SanityDirector.ForcedContext)
+        {
+            Guard(() => Hits.Add((ContentInfo.Clean(imitating), damage)));
+        }
     }
 
     // Reactions, opening the probe for a symptom that just played: the phantom sound's record to hand back when the
@@ -412,7 +428,8 @@ internal static class DayStats
                     seconds += (int)Parse(s);
                 }
             }
-            // "blocked=kind:seconds/kind:seconds..." (always last): the main blocker is the one that held it back longest.
+            // "blocked=kind:seconds/kind:seconds..." (always last): the main blocker is the one that held it back
+            // longest.
             string blocker = "none";
             float longest = 0f;
             int at = part.IndexOf("blocked=", StringComparison.Ordinal);
@@ -508,6 +525,8 @@ internal static class DayStats
             })
             .Arr("sounds", Sounds, (s, a) => a.Str("monster", s.Monster).Str("source", s.Source).Str("place", s.Place)
                 .Str("ground", s.Ground).Num("turned", s.Turned).Num("stopped", s.Stopped))
+            .Arr("phantom_hits", Hits, (h, a) => a.Str("as", h.As).Num("damage", h.Damage))
+            .Num("apparatus_pulled_s", (int)powerOffAt)
             .Arr("monsters", Monsters.ToList(), (m, a) => a.Str("name", m.Key).Num("count", m.Value.Count).Str("source", m.Value.Source))
             .Obj("lost_time", o => o.Bool("fired", lostTimeFired).Num("min_after_landing", Round(lostTimeMinutes, 1)).Num("trip_s", (int)lostTimeTrip))
             .Obj("could_play_s", o => { foreach (var e in Eligibility) o.Obj(e.Key, s => s.Num("seconds", e.Value.Seconds).Str("main_blocker", e.Value.Blocker)); })
@@ -541,15 +560,33 @@ internal static class DayStats
         return best != null ? best.ConfigKey : "";
     }
 
+    // The floor right under you, read now: the game's own surface value is only updated when you take a step (and
+    // keeps the last one on a floor with no surface tag), so it can still be the outside ground just after you walk in.
+    // Outside ground is "terrain"; a floor with no surface tag is "untagged".
     private static string GroundName(PlayerControllerB player)
     {
         StartOfRound startOfRound = StartOfRound.Instance;
-        int surface = player.currentFootstepSurfaceIndex;
-        if (startOfRound == null || startOfRound.footstepSurfaces == null || surface < 0 || surface >= startOfRound.footstepSurfaces.Length)
+        if (startOfRound == null || startOfRound.footstepSurfaces == null || player.thisPlayerBody == null)
         {
             return ContentInfo.Unknown;
         }
-        return ContentInfo.Clean(startOfRound.footstepSurfaces[surface].surfaceTag);
+        Ray down = new Ray(player.thisPlayerBody.position + Vector3.up, Vector3.down);
+        if (!Physics.Raycast(down, out RaycastHit hit, 6f, startOfRound.walkableSurfacesMask, QueryTriggerInteraction.Ignore))
+        {
+            return ContentInfo.Unknown;
+        }
+        if (hit.collider.GetComponent<Terrain>() != null)
+        {
+            return "terrain";
+        }
+        foreach (FootstepSurface surface in startOfRound.footstepSurfaces)
+        {
+            if (surface != null && hit.collider.CompareTag(surface.surfaceTag))
+            {
+                return ContentInfo.Clean(surface.surfaceTag);
+            }
+        }
+        return "untagged";
     }
 
     private static string Role()
