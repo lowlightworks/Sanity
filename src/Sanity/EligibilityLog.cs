@@ -6,7 +6,8 @@ using static System.FormattableString;
 
 namespace Sanity;
 
-// Telemetry only: how much of the day each symptom COULD have played, and what stopped it the rest of the time.
+// For the development log and the stats: how much of the day each symptom COULD have played, and what stopped it the
+// rest of the time.
 // Every few seconds while symptoms are possible (on a moon, alive, below Calm) it asks every symptom the same
 // question a natural roll asks (switched on? right tier? its own conditions?) and adds up the seconds, per tier
 // and per place. It never plays anything and changes nothing (the symptoms' CantPlayReason only looks).
@@ -28,7 +29,7 @@ internal static class EligibilityLog
     // Called by the director every frame while symptoms are possible.
     internal static void Tick(PlayerControllerB player, float dt)
     {
-        if (!Plugin.TelemetryEnabled.Value)
+        if (!Telemetry.Recording)
         {
             return;
         }

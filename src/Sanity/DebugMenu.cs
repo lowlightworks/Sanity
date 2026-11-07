@@ -14,7 +14,7 @@ namespace Sanity;
 //             reliefs, the world, what's loaded).
 //   Symptoms: one line per symptom (allow tick, fire button, short state; hover a line for the whole of it).
 //   Log:      the last 80 events, newest first, filterable (symptoms, chains, the Presence, meter, problems).
-//   Tools:    sanity presets and the test toggles.
+//   Tools:    sanity presets, the test toggles, and the switches for the development log and the anonymous stats.
 internal sealed class DebugMenu : MonoBehaviour
 {
     private const float Width = 460f;
@@ -205,7 +205,10 @@ internal sealed class DebugMenu : MonoBehaviour
             : Telemetry.Failed ? "FAILED (see BepInEx log)"
             : Telemetry.FilePath.Length == 0 ? "on (file starts at first landing)"
             : System.IO.Path.GetFileName(Telemetry.FilePath);
-        nowLines.Add("telemetry: " + telemetry);
+        string stats = !StatsUploader.Available ? "not available in this build"
+            : !Plugin.ShareStats.Value ? "off"
+            : StatsUploader.NoticeSeen ? "sharing (one summary per in-game day)" : "on, waiting for the menu notice";
+        nowLines.Add("local log: " + telemetry + "; anonymous stats: " + stats);
         if (Diagnostics.LastProblem.Length > 0)
         {
             nowLines.Add("problem seen: " + Diagnostics.LastProblem);
@@ -400,6 +403,10 @@ internal sealed class DebugMenu : MonoBehaviour
         Toggle(ref SanityDirector.IgnoreConditions, "Ignore conditions: F8 and buttons skip every check (may look wrong)", "conditions ignored (forced)", "conditions restored (forced)");
         Toggle(ref SanityDirector.ChainsAlways, "Chains always follow (every link rolls in)", "chains always", "chains by chance");
         GUILayout.Label("Armed from a button: no 5 s gap or relax wait (tier still applies unless Ignore conditions).", text);
+
+        GUILayout.Label("Logs and stats", heading);
+        ConfigToggle(Plugin.TelemetryEnabled, "Local log (development): a detailed CSV in the mod's folder");
+        ConfigToggle(Plugin.ShareStats, "Share anonymous stats (one summary per day)");
 
         GUILayout.Label("Display", heading);
         ConfigToggle(Plugin.ShowReadout, "On-screen readout");

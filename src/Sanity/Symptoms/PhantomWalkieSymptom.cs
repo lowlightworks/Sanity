@@ -213,7 +213,7 @@ internal sealed class PhantomWalkieSymptom : Symptom
         };
         bool held = player.currentlyHeldObjectServer == walkie;
         Telemetry.Event("PHANTOM_WALKIE", distance, Invariant(
-            $"{what} implied sender {sender.playerUsername} {distance:F0}m ({(senderInside ? "inside" : "outside")}) your walkie {(held ? "held" : "pocketed")}"));
+            $"{what} implied sender {Telemetry.PlayerLabel(sender)} {distance:F0}m ({(senderInside ? "inside" : "outside")}) your walkie {(held ? "held" : "pocketed")}"));
         return true;
     }
 

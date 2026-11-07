@@ -21,7 +21,8 @@ confirm or deny anything.
 
 ## Rules the mod follows
 
-- **Only on your screen.** The mod sends no messages of its own. Two things reach other players, both through the
+- **Only on your screen.** The mod sends no game messages of its own (the anonymous stats, if a player chooses to
+  share them, go to a web address, not to other players). Two things reach other players, both through the
   game's own code: a key used on the fake locked door is really used up, and the phantom hit's flinch holds back the
   game's own animation updates to others for 1.2 s (so they don't see it). Everything else is local: the flicker (the
   game's `RoundManager.FlickerLights`), fear (the game's local fear value), every sound, the walkie, lost time's clock
@@ -218,13 +219,32 @@ wall muffling stay true.
 - `ShowSanityReadout`: sanity, tier, rate, fear and the director's chance on screen.
 - `EnableDebugKeys`: F8 fires a random symptom that makes sense right now; F7 opens a debug menu with four tabs: Now
   (what the meter and director are doing, armed symptoms and what holds them), Symptoms (fire or arm any symptom),
-  Log (the last 80 events) and Tools (set sanity, freeze, ignore conditions, always chain, loudness).
+  Log (the last 80 events) and Tools (set sanity, freeze, ignore conditions, always chain, the development log and
+  stats switches, loudness).
 - `ShowPresence`: a red ball where the Presence is.
 - `Diagnostics.cs` records when the game's interact prompt goes missing, with what the mod was doing at the time.
 
-## Telemetry (off by default)
+## Anonymous stats and the development log
 
-With `EnableTelemetry` on, one CSV per game session goes to `BepInEx/Sanity_Telemetry/`. Nothing is sent anywhere.
+All of the mod's own files live in its own folder.
+
+**Anonymous stats** (`ShareAnonymousStats`, on by default): a one-time notice on the main menu (`StatsPanel.cs`, built
+from the game's own menu parts) says so and offers Turn off; nothing is sent until it has been shown. Whether it was
+shown is kept in the game's own saved preferences (not the config, so a shared modpack config can't skip it), and it
+shows again when `StatsUploader.NoticeVersion` goes up (raise it when what's collected changes in a way players should
+hear about). One small JSON packet per player per in-game day
+(`DayStats.cs`), sent in the background when the day ends (`StatsUploader.cs`) to a Google Apps Script that appends it
+as a row of a spreadsheet (`tools/stats-endpoint/Code.gs`). Packets wait in `stats/queue/` if they can't be sent (turning sharing off deletes them), and
+the last 10 sent are kept in `stats/sent/` for the player to read. Contents, in short: build and a per-launch random code; the day's
+context (moon, interior and weather with their source mod if modded, players, host or not, day length, how it ended);
+time per tier and per place; trips inside; per-symptom counts; reactions against control moments; each phantom
+sound's monster, place and ground; monsters on the moon; real scares, damage, death and revives; loot; settings; debug use; frame rate.
+Never names, IDs, positions or times. The README lists every field. `schema` changes whenever a field changes
+meaning; unknown values are "unknown" or -1, and a failure in one part never stops the rest.
+
+**Development log** (`EnableTelemetry`, also switchable in the F7 menu's Tools tab): a detailed CSV per game launch in
+`telemetry/` inside the mod's folder. Players appear as P1, P2... The stats are built from the same events, so the
+in-memory part runs when either setting is on; the file only exists for the log. Nothing in it is sent. Its rows:
 - The first row (SESSION) records the mod version, the config and every tuning number.
 - S rows, once a second on a moon: sanity, rate and its parts, where you are, company, fear, health, position and
   view, and more.
@@ -233,8 +253,9 @@ With `EnableTelemetry` on, one CSV per game session goes to `BepInEx/Sanity_Tele
 - REACTION rows measure whether a symptom changed what you did (turning, stopping, sprinting, scanning, answering the
   walkie), compared with random moments without a symptom.
 
-`tools/analyze.py` summarises the files; `tools/replay.py` re-runs them through the sanity formula to test tuning
-changes before playing (its numbers must match the C# code).
+`tools/analyze.py` summarises the logs or the stats spreadsheet; `tools/replay.py` re-runs the logs through the sanity
+formula to test tuning changes before playing (exactly), or estimates them from the stats' time budgets (roughly). Its
+numbers must match the C# code.
 
 ## Known issues and limitations
 
@@ -244,7 +265,7 @@ changes before playing (its numbers must match the C# code).
 | Lost time can still be missed if you don't look at the clock or the sky. | Now always night (8-10 PM) with the game's own time-of-day music cue; needs playtesting. |
 | Phantom sounds, the phantom hit's attack sound and the Presence's masks only imitate vanilla monsters. On moons with mostly modded monsters there are fewer sounds, silent hits and more "a person" Presences. | Planned: modded monster support (reading any monster's own sounds). |
 | Vanishing item with several items in view: only one goes, which can read as a glitch, and in a cluster it can be the item next to the one you meant. | Open. Options: only lone items; the whole pile goes at Breaking; always the item your grab would pick. |
-| Some items (seen with flasks) act oddly when they vanish. | Being investigated (telemetry records which parts were hidden). |
+| Some items (seen with flasks) act oddly when they vanish. | Being investigated (the development log records which parts were hidden). |
 | The Presence may come too often for how little it does, and "a person" says nothing when you turn to it. | Open. Ideas: lower its weight; a few quick steps moving off when looked at. |
 | A lockpicker item does nothing on the fake locked door. | Known gap. |
 | Interiors that don't tag their lights the way the game expects can't flicker. | Limitation (the flicker is the game's own). |
@@ -287,5 +308,4 @@ Spitballed during development. Not built and not promised; some may never happen
 | Effects that are actually dangerous | Gameplay | A later phase; everything is harmless for now. |
 | A recap after each round | Gameplay | What you experienced, revealed afterwards. |
 | Sync settings with the host | Multiplayer | So a group plays with the same tuning. |
-| Optional telemetry sharing | Tooling | Opt-in only, clearly explained. |
 | Automatic builds and releases | Tooling | A GitHub Action that builds and uploads a release. |

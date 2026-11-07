@@ -9,13 +9,15 @@ namespace Sanity;
 // Where to start reading:
 //   SanityMeter      the hidden meter: what drains it and what brings it back (with SanityReliefs, LootRecovery,
 //                    Weather, DayLength).
-//   SanityDirector   decides when a symptom happens and which one (with DirectorLayers: waves, moods, chains).
+//   SanityDirector   decides when a symptom happens and which one (with DirectorLayers: waves, moods, chains;
+//                    SprintHold: sounds that wait while you sprint).
 //   Symptoms/        one file per symptom; Symptom.cs is the shared template, ArmedSymptom.cs the "wait for the
 //                    right moment" kind. PhantomAudio plays their sounds.
 //   Patches/         hooks into the game's own code (HarmonyX); Compat/ is for optional mods. Safety keeps every
 //                    hook from breaking the game.
-//   Telemetry, Reactions, Insights, EligibilityLog, InputWatch, Diagnostics: the local CSV for tuning (off by
-//                    default). DebugMenu, DebugLog, SanityReadout: testing tools (off by default).
+//   Telemetry, Reactions, Insights, EligibilityLog, InputWatch, Diagnostics: the recording behind the development
+//                    log (off by default) and the anonymous stats (DayStats, StatsUploader, StatsPanel, ContentInfo).
+//                    DebugMenu, DebugLog, SanityReadout: testing tools (off by default).
 // docs/design.md describes how everything behaves and why.
 
 /// <summary>
@@ -31,6 +33,7 @@ public partial class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> ShowReadout { get; private set; } = null!;
     internal static ConfigEntry<bool> DebugKeys { get; private set; } = null!;
     internal static ConfigEntry<bool> TelemetryEnabled { get; private set; } = null!;
+    internal static ConfigEntry<bool> ShareStats { get; private set; } = null!;
     internal static ConfigEntry<bool> ShowPresence { get; private set; } = null!;
     internal static ConfigEntry<float> DrainMultiplier { get; private set; } = null!;
     internal static ConfigEntry<float> RecoveryMultiplier { get; private set; } = null!;
@@ -98,12 +101,19 @@ public partial class Plugin : BaseUnityPlugin
             false,
             "Testing: draw a red ball where the Presence is while it's around (only on your screen).");
 
-        // Off by default: players opt in (playtesters turn it on in their own config).
+        // Off by default. A development setting for playtests (also switchable in the F7 debug menu's Tools tab).
         TelemetryEnabled = Config.Bind(
             "Telemetry",
             "EnableTelemetry",
             false,
-            "Record sanity and the events that change it to a CSV file in BepInEx/Sanity_Telemetry. Local only: nothing is sent anywhere. The file includes in-game player names.");
+            "Development: keep a detailed log of each game (sanity every second, every event) as a CSV file in the mod's own folder, under telemetry/. Players appear as P1, P2... Local only: nothing in it is sent anywhere.");
+
+        // The anonymous stats: on by default; nothing is sent until the player has seen the notice on the main menu.
+        ShareStats = Config.Bind(
+            "Stats",
+            "ShareAnonymousStats",
+            true,
+            "Send one small anonymous summary per in-game day, to help tune the mod: numbers only (time in each sanity level, which symptoms happened and how people reacted, moon, group size). No names, no IDs. Nothing is sent until you've seen the notice on the main menu (whether you've seen it is kept in the game's own settings, not here, so a modpack's config can't skip it for you). The last 10 sent are kept in stats/sent/ in the mod's folder, so you can read them. Full list of fields in the README.");
 
         PhantomAudio.Loudness = Config.Bind(
             "Tuning",
@@ -137,7 +147,8 @@ public partial class Plugin : BaseUnityPlugin
         SanityReadout.Create();
         DebugMenu.Create();
         PhantomAudio.Create();
-        Telemetry.Create();   // closes the telemetry file when the game quits
+        Telemetry.Create();   // ends a day cut short (game closed, disconnected) and closes the log file on quit
+        StatsUploader.Create();   // sends any waiting stats in the background (only if sharing is on)
 
         Log.LogInfo($"Plugin {Name} {BuildVersion} is loaded!");
     }

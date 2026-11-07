@@ -643,7 +643,7 @@ internal static class SanityMeter
             {
                 float distance = Vector3.Distance(me.transform.position, other.placeOfDeath);
                 Reactions.NoteConfound("teammate died");
-                string who = Invariant($"{other.playerUsername} ({other.causeOfDeath}) {distance:F0}m away");
+                string who = Invariant($"{Telemetry.PlayerLabel(other)} ({other.causeOfDeath}) {distance:F0}m away");
                 if (me.isPlayerDead)
                 {
                     Telemetry.Event("TEAMMATE_DIED", distance, who);

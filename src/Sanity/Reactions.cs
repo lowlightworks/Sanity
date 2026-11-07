@@ -44,6 +44,7 @@ internal static class Reactions
 
     private sealed class Probe
     {
+        internal object? StatsSound;   // the anonymous stats' record of this phantom sound, if it is one
         internal bool Real;
         internal string Name = "";
         internal float T0;
@@ -99,11 +100,13 @@ internal static class Reactions
         Open.RemoveAll(p => !p.Real);
 
         PlayerControllerB? player = Local();
-        if (player == null || !Plugin.TelemetryEnabled.Value)
+        if (player == null || !Telemetry.Recording)
         {
             return;
         }
-        Open.Add(NewProbe(player, true, symptom.ConfigKey, source));
+        Probe probe = NewProbe(player, true, symptom.ConfigKey, source);
+        probe.StatsSound = DayStats.TakeSound(symptom);
+        Open.Add(probe);
     }
 
     // Something that would muddy every open probe (real fear, damage, a teammate's death, the debug menu).
@@ -310,6 +313,10 @@ internal static class Reactions
             .Append(' ').Append(probe.Context)
             .Append(" confound=").Append(probe.Confound.Length == 0 ? "none" : probe.Confound.Replace(' ', '_'));
         Telemetry.Event("REACTION", probe.Real ? 1f : 0f, Text.ToString());
+        if (probe.StatsSound != null)
+        {
+            DayStats.SoundReaction(probe.StatsSound, probe.Directional, probe.Turned, probe.Stopped, probe.Confound.Length == 0);
+        }
     }
 
     private static bool CarriesPoweredWalkie(PlayerControllerB player)

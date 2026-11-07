@@ -272,6 +272,7 @@ internal sealed class PhantomSoundSymptom : Symptom
         string detail = Invariant($"{chosen.Entry.Name} {sound.Name} x{count}{(approaching ? " approaching" : "")} ")
             + Invariant($"{distance:F0}m {PhantomPlacement.Side(player, positions[0])} ({chosen.Origin})");
         Telemetry.Event("PHANTOM_SOUND", distance, detail);
+        DayStats.NoteSound(chosen.Example, chosen.Entry.Name, player);
         LastSource = positions[0];
         if (approaching)
         {

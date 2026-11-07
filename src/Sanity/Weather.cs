@@ -38,6 +38,9 @@ internal static class Weather
     };
 
     internal static string Name { get; private set; } = "-";
+
+    // Whether a weather has built-in numbers here (vanilla, or a modded one this mod knows), for the stats.
+    internal static bool IsKnown(string name) => Table.ContainsKey(name.Replace(" ", "")) || name.Equals("Clear", StringComparison.OrdinalIgnoreCase);
     internal static float Outside { get; private set; } = 1f;
     internal static float Inside { get; private set; } = 1f;
     internal static float NightHeadStart { get; private set; }

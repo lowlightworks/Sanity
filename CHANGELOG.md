@@ -5,6 +5,13 @@
 - The locked door and the vanishing item can now happen from Uneasy (a little less often there than lower down).
 - Lost time no longer takes one of the two slots for symptoms waiting for their moment, so it doesn't keep the
   flicker, the locked door or the vanishing item from happening.
+- Anonymous stats, to help tune the mod: on by default, with a one-time notice on the main menu that lets you turn
+  it off (nothing is sent before you've seen it). One small summary per in-game day goes to the mod's author: numbers
+  and game content names only, no names or IDs. Every field is listed in the README, and the last 10 sent are kept in
+  the mod's folder so you can read them.
+- The detailed log (`EnableTelemetry`, now described as a development setting) moved into the mod's own folder, under
+  `telemetry/`, and writes players as P1, P2... instead of their names. It can also be switched in the F7 debug menu.
+  Old logs in `BepInEx/Sanity_Telemetry` aren't used any more; delete that folder whenever you like.
 - A feedback form and a Discussions page for stories, ideas and questions (links in the README).
 - Fixed the day-length measurement: a normal day now reads as 1x (it read 0.71x). Lost time's "6 minutes after
   landing" now really means 6 minutes on a normal day (it came after about 4).

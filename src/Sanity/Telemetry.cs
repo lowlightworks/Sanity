@@ -11,14 +11,19 @@ using static System.FormattableString;
 
 namespace Sanity;
 
-// Records this player's sanity, and everything that changes it, into a CSV file for tuning.
-// One file per game session, in BepInEx/Sanity_Telemetry/. Local only: nothing is sent anywhere.
+// Records this player's sanity, and everything that changes it. Runs when either of these is on:
+//   - the local log (config Telemetry/EnableTelemetry, a development setting): one CSV file per game launch in the
+//     mod's own folder, "telemetry/". Players are written as their lobby slot (P1, P2, ...), never by name. Nothing in
+//     it is sent anywhere.
+//   - the anonymous stats (StatsUploader): every event below is also handed to DayStats, which builds the day's small
+//     packet. Without the local log, no file is written.
 //
 // Two kinds of rows, same columns:
 //   S (sample) - once per second on a moon: the "heart rate monitor" trace.
 //   E (event)  - the moment something happens: a cause (entered the facility, door closed, damage,
 //                fear jump, symptom, death...), with the sanity values at that instant.
-// After the player dies, nothing more is recorded for that day except the day summary.
+// After the player dies, nothing more is recorded for that day except the day summary, unless they're revived (the
+// REVIVED row; recording carries on from there). The stats still count the time spent dead.
 // The first row after the header (SESSION) records the mod version, config and every tuning number,
 // so any CSV can be matched to the build that made it.
 internal static class Telemetry
@@ -36,14 +41,23 @@ internal static class Telemetry
 
     // ---- File ----
     private static StreamWriter? writer;
-    private static bool failed;
+    private static bool failed;         // the file failed: no more file this launch (the stats carry on)
     private static bool playerSeen;     // no file before the first player tick (so a menu toggle can't start one)
     private static float sessionStart;
-    private static string username = "player";
 
     // For the debug menu.
     internal static string FilePath = "";
     internal static bool Failed => failed;
+
+    // Recording runs when the local log is on or the player shares the anonymous stats; the file is only for the log.
+    internal static bool Recording => Plugin.TelemetryEnabled.Value || StatsUploader.Sharing;
+    private static bool FileWanted => Plugin.TelemetryEnabled.Value && !failed;
+
+    // Today's interior name, for the stats.
+    internal static string CurrentInterior => interior;
+
+    // A player as written in telemetry: their slot in the lobby ("P1", "P2", ...), never their name.
+    internal static string PlayerLabel(PlayerControllerB? player) => player != null ? "P" + (player.playerClientId + 1) : "P?";
 
     // ---- Day tracking ----
     private static bool wasOnMoon;
@@ -114,13 +128,18 @@ internal static class Telemetry
     // Called once per frame for the local player, after the meter and the director.
     internal static void Tick(PlayerControllerB player)
     {
-        if (!Plugin.TelemetryEnabled.Value || failed)
+        if (!Recording)
         {
+            // Both switched off mid-day: that day isn't recorded any further (and not sent as if it were whole).
+            if (wasOnMoon)
+            {
+                wasOnMoon = false;
+                DayStats.Discard();
+            }
             return;
         }
 
         playerSeen = true;
-        username = player.playerUsername;
         dead = player.isPlayerDead;
         health = player.health;
 
@@ -134,6 +153,10 @@ internal static class Telemetry
             EndDay();
         }
         wasOnMoon = onMoon;
+        if (onMoon)
+        {
+            DayStats.Tick(player, Time.deltaTime);
+        }
 
         // Off a moon, or dead: nothing to record until the next day.
         if (!onMoon || dead)
@@ -219,7 +242,7 @@ internal static class Telemetry
         DebugLog.Note(name, detail);
 
         // Before the first player tick (main menu) there's nothing to record, and no file yet.
-        if (!Plugin.TelemetryEnabled.Value || failed || !playerSeen)
+        if (!Recording || !playerSeen)
         {
             return;
         }
@@ -240,13 +263,14 @@ internal static class Telemetry
             case "DEPOSIT": delivered++; deliveredValue += (int)value; break;
         }
 
+        DayStats.OnEvent(name, value, detail);
         WriteRow("E", name, value.ToString("0.###", Num), detail);
     }
 
     // Called by the KillPlayer patch, with the real cause of death.
     internal static void LocalDied(CauseOfDeath cause)
     {
-        if (!Plugin.TelemetryEnabled.Value || failed || !SanityMeter.OnMoon || dead)
+        if (!Recording || !SanityMeter.OnMoon || dead)
         {
             return;
         }
@@ -269,7 +293,7 @@ internal static class Telemetry
     internal static void Close()
     {
         // Quitting mid-day: still write that day's summary.
-        if (wasOnMoon && writer != null && !failed)
+        if (wasOnMoon && Recording)
         {
             wasOnMoon = false;
             EndDay("quit");
@@ -290,6 +314,7 @@ internal static class Telemetry
     private static void StartDay()
     {
         day++;
+        DayStats.StartDay();
         StartOfRound startOfRound = StartOfRound.Instance;
         moon = startOfRound != null && startOfRound.currentLevel != null ? startOfRound.currentLevel.PlanetName : "?";
         interior = InteriorName();
@@ -367,6 +392,7 @@ internal static class Telemetry
         Event("DAY_ELIGIBILITY", day, EligibilityLog.Summary());
         Event("DAY_END", day, summary);
         Flush();
+        DayStats.EndDay(ended, secondsOnMoon > 0f ? frames / secondsOnMoon : 0f, minFps < 9999f ? minFps : 0f);
 
         // One line per day in the normal BepInEx log too, for a quick look.
         Plugin.Log.LogInfo($"Day {day} ({moon}) summary: {summary}");
@@ -393,7 +419,7 @@ internal static class Telemetry
         }
         else
         {
-            Event("DEPOSIT_TEAMMATE", item.scrapValue, Invariant($"{name} value {item.scrapValue} by {carrier.playerUsername}"));
+            Event("DEPOSIT_TEAMMATE", item.scrapValue, Invariant($"{name} value {item.scrapValue} by {PlayerLabel(carrier)}"));
         }
     }
 
@@ -513,6 +539,28 @@ internal static class Telemetry
         "ReservedItemSlot", "LethalLevelLoader", "MoreCompany", "LateCompany",
     };
 
+    // The watched mods that are installed, for the stats (plugin ids only matched, nothing else read).
+    internal static List<string> WatchedModsFound()
+    {
+        List<string> found = new List<string>();
+        try
+        {
+            ICollection<string> ids = BepInEx.Bootstrap.Chainloader.PluginInfos.Keys;
+            foreach (string watched in WatchedMods)
+            {
+                if (ids.Any(id => id.IndexOf(watched, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    found.Add(watched);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Nothing found then.
+        }
+        return found;
+    }
+
     internal static string ModsSummary()
     {
         try
@@ -616,7 +664,7 @@ internal static class Telemetry
     // gameStep: S rows only, the game time since the previous S row (-1 = leave the column empty).
     private static void WriteRow(string kind, string eventName, string value, string detail, float gameStep = -1f)
     {
-        if (writer == null && !Open())
+        if (!FileWanted || (writer == null && !Open()))
         {
             return;
         }
@@ -687,11 +735,9 @@ internal static class Telemetry
     {
         try
         {
-            string folder = Path.Combine(Paths.BepInExRootPath, "Sanity_Telemetry");
+            string folder = Path.Combine(ModFolder, "telemetry");
             Directory.CreateDirectory(folder);
-
-            string safeName = string.Join("_", username.Split(Path.GetInvalidFileNameChars()));
-            string path = Path.Combine(folder, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{safeName}.csv");
+            string path = Path.Combine(folder, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.csv");
 
             writer = new StreamWriter(path, append: false);
             FilePath = path;
@@ -721,12 +767,23 @@ internal static class Telemetry
         }
     }
 
-    // Fail silently: one warning, then telemetry switches itself off for this session.
+    // The mod's own folder (where its DLL is): all of its files live in here.
+    internal static string ModFolder => Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? Paths.PluginPath;
+
+    // Fail silently: one warning, then the local file stops for this launch (the stats don't depend on it).
     private static void Fail(Exception e)
     {
         failed = true;
-        Plugin.Log.LogWarning($"Telemetry disabled for this session: {e.Message}");
-        Close();
+        Plugin.Log.LogWarning($"Telemetry: the local log stopped for this session: {e.Message}");
+        try
+        {
+            writer?.Dispose();
+        }
+        catch (Exception)
+        {
+            // Closing anyway.
+        }
+        writer = null;
     }
 
     // Commas would break the CSV columns, so swap them out of free text.
@@ -750,7 +807,7 @@ internal static class Telemetry
         }
 
         wasOnMoon = false;
-        if (writer != null && !failed && Plugin.TelemetryEnabled.Value)
+        if (Recording)
         {
             EndDay("disconnected");
         }
